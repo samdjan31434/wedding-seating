@@ -5,9 +5,6 @@ import math
 import os
 import pandas as pd
 
-# used to repeat the random number 20 times
-#random.seed(1)
-
 
 # create guest and assign random score to some of them 
 def generate_guest(n,m):
@@ -28,7 +25,7 @@ def generate_guest(n,m):
     
     return Preference
 
-n= 80    # number of guest
+n= 100    # number of guest
 m= 10    # number of tables
 
 
@@ -53,7 +50,6 @@ def save_file_instances(n, m, filename='instance.npy'):
 
 P = save_file_instances(n, m)
 
-    
 # save the file as .inc to use in GAMS
 with open('Generated_instance.inc', 'w') as f:
     for i in range(n):
@@ -64,7 +60,7 @@ with open('Generated_instance.inc', 'w') as f:
 
 
 
-class Conflict_Graph:
+class Compatible_Graph:
   def __init__(self):
     self.vertices = {}    # store each guest and the list of conflciting vertices
     self.edges = {}       # stores weight for conflict between edges
@@ -83,59 +79,240 @@ class Conflict_Graph:
     return len(self.vertices[vertex])           # count number of guest they are in conflict with
   
 
+def build_graph_negative(P,n):
+    graph  = Compatible_Graph()
 
-graph  = Conflict_Graph()
-
-# inistialise the graph with n vertices
-for i in range(n):
-   graph.add_vertex(i)
-
-
-# intilialises edges with weight between guest with preference
-for i in range(n):
-   for j in range(i+1,n):
-      if P[i][j]<0:
-         graph.add_edge(i,j)
-         graph.add_edge(j, i)
-         graph.add_weight(i,j,P[i][j])
+    # inistialise the graph with n vertices
+    for i in range(n):
+        graph.add_vertex(i)
 
 
-
-# dictionary key(guest ): value(table guest is assigned)
-assignment = {}
-
-# finds the table capacity
-capacity = n // m
-
-# create a dictionary
-# key(table number): value(guest count at each table)
-table_count = {}
-for t in range(1, m+1):    # ← add this
-    table_count[t] = 0     # ← add this
-
-# greedy colouring graph algorithm used to find an initial solution
-for guest in range(n):
-    # find tables used by conflicting neighbours
-    used_tables = set()
-    for neighbour in graph.vertices[guest]:
-        if neighbour in assignment:
-            used_tables.add(assignment[neighbour])
+    # intilialises edges with weight between guest with preference
+    for i in range(n):
+        for j in range(i+1,n):
+            if P[i][j]<0:
+                graph.add_edge(i,j)
+                graph.add_edge(j, i)
+                graph.add_weight(i,j,P[i][j])
     
-    # used to find the lowest table number that has no conflicting guest and is not full
-    # neutral guest are assinged to the lowest avaialbe table number since used table return an emtpy set
-    table = 1
-    while table <= m:
-        if table not in used_tables and table_count[table] < capacity:
-            break
-        table += 1
-        # this occur when there a seating choice would result in conflict therefore pick table with the least capacity 
-        if table > m:
-            table = min(table_count, key=table_count.get)
-            break
+    return graph
 
-    # assing guest to a table
-    assignment[guest] = table
-    table_count[table] += 1
+def build_graph_mixed(P,n):
+    graph  = Compatible_Graph()
+
+    # inistialise the graph with n vertices
+    for i in range(n):
+        graph.add_vertex(i)
+
+
+    # intilialises edges with weight between guest with preference
+    for i in range(n):
+        for j in range(i+1,n):
+            if P[i][j] != 0:
+                graph.add_edge(i,j)
+                graph.add_edge(j, i)
+                graph.add_weight(i,j,P[i][j])
+    
+    return graph
+
+def build_graph_positive(P,n):
+    graph  = Compatible_Graph()
+
+    # inistialise the graph with n vertices
+    for i in range(n):
+        graph.add_vertex(i)
+
+
+    # intilialises edges with weight between guest with preference
+    for i in range(n):
+        for j in range(i+1,n):
+            if P[i][j] > 0:
+                graph.add_edge(i,j)
+                graph.add_edge(j, i)
+                graph.add_weight(i,j,P[i][j])
+    
+    return graph
+
+
+# greedy colouring algorihtm - find the first available table that is feasible for that guest and does not cause table capacity to overflow
+def negative_greedy(graph,n,m):
+    # dictionary key(guest ): value(table guest is assigned)
+    assignment = {}
+    # finds the table capacity
+    capacity = n // m
+
+    # create a dictionary
+    # key(table number): value(guest count at each table)
+    table_count = {}
+    for t in range(1, m+1):    
+        table_count[t] = 0     
+
+    # greedy colouring graph algorithm used to find an initial solution
+    for guest in range(n):
+        # find tables used by conflicting neighbours
+        used_tables = set()
+        for neighbour in graph.vertices[guest]:
+            if neighbour in assignment:
+                used_tables.add(assignment[neighbour])
+        
+        # used to find the lowest table number that has no conflicting guest and is not full
+        # neutral guest are assinged to the lowest avaialbe table number since used table return an emtpy set
+        table = 1
+        while table <= m:
+            if table not in used_tables and table_count[table] < capacity:
+                break
+            table += 1
+            # this occur when there a seating choice would result in conflict therefore pick table with the least capacity 
+            if table > m:
+                table = min(table_count, key=table_count.get)
+                break
+
+        # assing guest to a table
+        assignment[guest] = table
+        table_count[table] += 1
+
+    return assignment
+
+
+def mixed_greedy(n,m, P):
+    # dictionary key(guest ): value(table guest is assigned)
+    assignment = {}
+    # finds the table capacity
+    capacity = n // m
+
+    # create a dictionary
+    # key(table number): value(guest count at each table)
+    table_count = {}
+    for t in range(1, m+1):    
+        table_count[t] = 0     
+   
+
+    for guest in range(n):
+        best_score = -200
+        best_table = 1 
+
+        for table in range(1,m+1):
+
+            if table_count[table]< capacity:
+                score  =0
+                for neighbours, table_assigned in assignment.items():
+                    if table == table_assigned:
+                        score += P[guest][neighbours]
+
+                if score > best_score:
+                    best_score =score
+                    best_table = table
+            
+        assignment[guest] = best_table
+        table_count[best_table] += 1
+
+    return assignment    
+
+
+def ordered_positive_greedy(n,m,P):
+    # dictionary key(guest ): value(table guest is assigned)
+    assignment = {}
+    # finds the table capacity
+    capacity = n // m
+
+    # create a dictionary
+    # key(table number): value(guest count at each table)
+    table_count = {}
+    for t in range(1, m+1):    
+        table_count[t] = 0  
+    
+    sums = {}
+    for i in range(n):
+        total =0
+        for j in range(n):
+            if P[i][j]> 0:
+                total+= P[i][j]
+        sums[i] = total
+
+
+    guest_order = sorted(sums, key=sums.get,reverse=True)
+
+    for guest in guest_order:
+        best_score = -200
+        best_table = 1
+
+        for table in range(1, m+1):
+            if table_count[table] < capacity:
+                score = 0
+                for neighbour, table_assigned in assignment.items():
+                    if table_assigned == table:
+                        score += P[guest][neighbour]
+
+                if score > best_score:
+                    best_score = score
+                    best_table = table
+
+        assignment[guest] = best_table
+        table_count[best_table] += 1
+
+    return assignment
+
+
+def BFS_greedy(graph,n,m):
+     # dictionary key(guest ): value(table guest is assigned)
+    assignment = {}
+    # finds the table capacity
+    capacity = n // m
+
+    # create a dictionary
+    # key(table number): value(guest count at each table)
+    table_count = {}
+    for t in range(1, m+1):    
+        table_count[t] = 0  
+
+    visited =set()
+    current_table = 1
+    start_guest  =0 
+    most_neighbours = 0
+    for i in range(n):
+        count = graph.get_adjacent_count(i)
+        if most_neighbours > count:
+            most_neighbours = count
+            start_guest = i
+
+    queue = [start_guest]
+
+    while len(assignment)<n:
+        guest = queue.pop(0)
+        if guest in visited:
+            continue
+
+        visited.add(guest)
+
+        if table_count[current_table]< capacity:
+            assignment[guest] = current_table
+            table_count[current_table] +=1
+        else:
+            current_table+=1 
+            if current_table>m:
+                current_table =m
+            assignment[guest] = current_table
+            table_count[current_table] += 1
+
+        for neighbour in graph.vertices[guest]:
+            if neighbour not in visited:
+                queue.append(neighbour)
+
+        for guest in range(n):
+            if guest not in visited:
+                queue.append(guest)
+                break
+
+    return assignment       
+
+
+
+
+
+
+
+
+
 
 
 # calculate the total satisfaction score 
@@ -157,78 +334,103 @@ def generate_neighbour_state(assignment ,n,v):
         guest1 = random.randint(0,n-1)
         guest2 = random.randint(0,n-1)
 
-        if assignment[guest1] != assignment[guest2]:
+        if new_assignment[guest1] != new_assignment[guest2]:
                 new_assignment[guest1], new_assignment[guest2] = new_assignment[guest2], new_assignment[guest1]
 
     return new_assignment
 
 
 
-
-
-
-
 # used the pseudocode from https://www.researchgate.net/publication/354721896_A_Heuristic_Approach_in_Solving_the_Optimal_Seating_Chart_Problem
 # variable and parameter used in simmulated annealing
-time_limit = 2
-best_state = assignment.copy()
-stagnation = 0
-v = 1
-start_time = time.time()
-max_stagnation  = 100
-T = 125
-gamma = 0.95
-il_limit = 100 
-x = assignment.copy()
+
+def simulated_annealing(initial_assignment,n,m,P):
+
+        time_limit = 5
+        best_state = initial_assignment.copy()
+        stagnation = 0
+        v = 1
+        start_time = time.time()
+        max_stagnation  = 100
+        T = 125
+        gamma = 0.95
+        il_limit = 100 
+        x = initial_assignment.copy()
              
 
 
-# Simmulated annealing that continue while temperture is not zero or the time limit is not reached
-while T>0 and (time.time()- start_time)< time_limit:
-    for il in range(il_limit):
-        y = x.copy()
-        y = generate_neighbour_state(y,n,v)
-        f_x = satisfaction_score(x,P,n)
-        f_y = satisfaction_score(y,P,n)
+        # Simmulated annealing that continue while temperture is not zero or the time limit is not reached
+        while T>0 and (time.time()- start_time)< time_limit:
+            for il in range(il_limit):
+                y = x.copy()
+                y = generate_neighbour_state(y,n,v)
+                f_x = satisfaction_score(x,P,n)
+                f_y = satisfaction_score(y,P,n)
 
-        if f_y > f_x:
-            x = y
-            stagnation =0
-            v =1
-            if f_y > satisfaction_score(best_state, P , n):
-                best_state = y.copy()
-        else:
-            r = random.random()
-            try:
-                prob_y = 1 / (1 + math.exp(-(f_y - f_x) / T))
-            except OverflowError:
-                prob_y = 0
-            if prob_y > r :
-                x = y.copy()
-                stagnation = 0
-                v = 1
-            else:
-                stagnation = stagnation + 1
-            if stagnation == max_stagnation:
-                stagnation =0
-                v += 1
-                if v>m:
-                    v = 1
-    T = T * gamma           
+                if f_y > f_x:
+                    x = y
+                    stagnation =0
+                    v =1
+                    if f_y > satisfaction_score(best_state, P , n):
+                        best_state = y.copy()
+                else:
+                    r = random.random()
+                    try:
+                        prob_y = 1 / (1 + math.exp(-(f_y - f_x) / T))
+                    except OverflowError:
+                        prob_y = 0
+                    if prob_y > r :
+                        x = y.copy()
+                        stagnation = 0
+                        v = 1
+                    else:
+                        stagnation = stagnation + 1
+                    if stagnation == max_stagnation:
+                        stagnation =0
+                        v += 1
+                        if v>m:
+                            v = 1
+            T = T * gamma  
 
-               
-sa_score = satisfaction_score(best_state, P, n)
-print(f"Satisfaction score: {sa_score}")
+        return best_state
 
 
-# greedy colouring algorihtm - find the first available table that is feasible for that guest and does not cause table capacity to overflow
+
+neg_assignment = negative_greedy(build_graph_negative(P, n),n,m)
+neg_initial_score = satisfaction_score(neg_assignment, P, n)
+neg_sa_state = simulated_annealing(neg_assignment, n, m, P)
+neg_sa_score = satisfaction_score(neg_sa_state, P, n)
+print(f"Satisfaction score with negative greedy: {neg_sa_score}")
+
+
+mix_assignment = mixed_greedy(n, m, P)
+mix_initial_score = satisfaction_score(mix_assignment, P, n)
+mix_sa_state = simulated_annealing(mix_assignment, n, m, P)
+mix_sa_score = satisfaction_score(mix_sa_state, P, n)
+print(f"Satisfaction score with mix greedy: {mix_sa_score}")
+
+
+pos_assignment = ordered_positive_greedy(n, m, P)
+pos_initial_score = satisfaction_score(pos_assignment, P, n)
+pos_sa_state = simulated_annealing(pos_assignment, n, m, P)
+pos_sa_score = satisfaction_score(pos_sa_state, P, n)
+print(f"Satisfaction score with positive greedy: {pos_sa_score}")
+
+
+bfs_assignment = BFS_greedy(build_graph_positive(P,n),n,m)
+bfs_initial_score = satisfaction_score(bfs_assignment, P, n)
+bfs_sa_state = simulated_annealing(bfs_assignment, n, m, P)
+bfs_sa_score = satisfaction_score(bfs_sa_state, P, n)
+print(f"Satisfaction score with bfs: {bfs_sa_score}")
+
+
 
 table_guest = {}
 for table in range(1,m+1):
     table_guest[table] = []
 
 for g in range(n):
-    table_guest[best_state[g]].append(g)    
+    table_guest[neg_sa_state[g]].append(g)    
 
 
 def each_table_satifaction(table_guest, P ):
@@ -261,7 +463,7 @@ def local_search(assignment ,n ,m ,P):
             table_guests[table] = []
         for g in range(n):
             table_guests[assignment[g]].append(g)
-        current_scores = each_table_satifaction(table_guest,P)
+        current_scores = each_table_satifaction(table_guests,P)
         sorted_table_scoring = sorted(current_scores,key= current_scores.get)
         worst_table1 = sorted_table_scoring[0]
         worst_table2 = sorted_table_scoring[1]
@@ -278,25 +480,5 @@ def local_search(assignment ,n ,m ,P):
     return assignment             
  
 
-"""
-def local_search(assignment ,n ,m ,P):
-        current_scores = each_table_satifaction(table_guest,P)
-        sorted_table_scoring = sorted(current_scores,key= current_scores.get)
-        worst_table1 = sorted_table_scoring[0]
-        worst_table2 = sorted_table_scoring[1]
-        for guest1 in table_guest[worst_table1]:
-            for guest2 in table_guest[worst_table2]:
-                before_score = satisfaction_score(assignment,P,n)
-                assignment[guest1], assignment[guest2] = assignment[guest2], assignment[guest1]
-                after_score = satisfaction_score(assignment, P, n)
-                if after_score> before_score:
-                    break
-                else:
-                    assignment[guest1], assignment[guest2] = assignment[guest2], assignment[guest1]
-        return assignment 
-"""        
-
-
-
-new_best_state = local_search(best_state,n,m, P)
-print(f"Score after local search: {satisfaction_score(new_best_state, P, n)}")
+#new_best_state = local_search(neg_sa_state,n,m, P)
+#print(f"Score after local search: {satisfaction_score(new_best_state, P, n)}")

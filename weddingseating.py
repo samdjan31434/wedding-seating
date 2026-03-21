@@ -5,7 +5,7 @@ import math
 import os
 import pandas as pd
 
-
+"""
 # create guest and assign random score to some of them 
 def generate_guest(n,m):
     Preference = np.zeros((n,n),dtype =int)
@@ -23,14 +23,90 @@ def generate_guest(n,m):
             Preference[i][j] = random_score
             Preference[j][i] = random_score
     
+    return Preference   """
+
+def age_score(age_diff):
+    if age_diff <= 5:
+        return 10
+    elif age_diff <= 10:
+        return 5
+    elif age_diff <= 20:
+        return 2
+    elif age_diff <= 30:
+        return 0
+    elif age_diff <= 40:
+        return -5
+    else:
+        return -10
+
+
+def generate_guest(n,m, graph_density):
+    Preference = np.zeros((n,n),dtype =int)
+
+    ages = {}
+    for i in range(n):
+        ages[i] = np.random.randint(18, 90)
+
+    # num of couples 20%
+    num_couples = int(n*0.2) //2
+    for i in range(0,num_couples*2,2):
+        Preference[i][i+1] = 10
+        Preference[i+1][i] =10
+        
+    # assume half of couples have a child 
+    child_start = num_couples * 2
+    child_index = child_start
+    for i in range(0, num_couples * 2, 4):   #assign a child to every other couple
+        if child_index >= n:
+            break
+        Preference[child_index][i] = 10
+        Preference[i][child_index] = 10
+        Preference[child_index][i+1] = 10
+        Preference[i+1][child_index] = 10
+        child_index += 1
+    
+    
+    for i in range(n):
+        for j in range(i+1,n):
+            if Preference[i][j] ==0:
+                if np.random.random() < graph_density:
+                    score = np.random.randint(1,9)
+                    Preference[i][j] = score
+                    Preference[j][i] = score
+    
+    num_conflicts = int(n * 0.05)
+    conflicts_assigned = 0
+    while conflicts_assigned < num_conflicts:
+        i = np.random.randint(0, n)
+        j = np.random.randint(0, n)
+        if i != j and Preference[i][j] == 0:
+            score = np.random.randint(-10, -1)
+            Preference[i][j] = score
+            Preference[j][i] = score
+            conflicts_assigned += 1
+
+
+
+    for i in range(n):
+        for j in range(i+1, n):
+            if Preference[i][j] == 0:
+                age_diff = abs(ages[i] - ages[j])
+                score = age_score(age_diff)
+                Preference[i][j] = score
+                Preference[j][i] = score
+
     return Preference
+    
+
+
+
 
 n= 100    # number of guest
 m= 10    # number of tables
 
 
 def save_file_instances(n, m, filename='instance.npy'):
-    P = generate_guest(n, m)   # always generates new instance
+    P = generate_guest(n, m, 0.3)   # always generates new instance
     np.save(filename, P)
     return P
 
@@ -188,7 +264,7 @@ def mixed_greedy(n,m, P):
    
 
     for guest in range(n):
-        best_score = -200
+        best_score = -10000000
         best_table = 1 
 
         for table in range(1,m+1):
@@ -233,7 +309,7 @@ def ordered_positive_greedy(n,m,P):
     guest_order = sorted(sums, key=sums.get,reverse=True)
 
     for guest in guest_order:
-        best_score = -200
+        best_score = -1000000
         best_table = 1
 
         for table in range(1, m+1):
@@ -334,8 +410,9 @@ def generate_neighbour_state(assignment ,n,v):
         guest1 = random.randint(0,n-1)
         guest2 = random.randint(0,n-1)
 
-        if new_assignment[guest1] != new_assignment[guest2]:
-                new_assignment[guest1], new_assignment[guest2] = new_assignment[guest2], new_assignment[guest1]
+        while new_assignment[guest1] == new_assignment[guest2]:
+            guest2 = random.randint(0, n-1)
+        new_assignment[guest1], new_assignment[guest2] = new_assignment[guest2], new_assignment[guest1]
 
     return new_assignment
 
@@ -480,5 +557,6 @@ def local_search(assignment ,n ,m ,P):
     return assignment             
  
 
-#new_best_state = local_search(neg_sa_state,n,m, P)
-#print(f"Score after local search: {satisfaction_score(new_best_state, P, n)}")
+new_best_state = local_search(neg_sa_state,n,m, P)
+print(f"Score after local search: {satisfaction_score(new_best_state, P, n)}")
+

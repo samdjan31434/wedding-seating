@@ -8,6 +8,9 @@ from collections import Counter
 
 rng = np.random.default_rng()
 
+n= 100    # number of guest
+m= 10    # number of tables
+
 """
 # create guest and assign random score to some of them 
 def generate_guest(n,m):
@@ -42,23 +45,27 @@ def age_score(age_diff):
     else:
         return -10
 
-def generate_guest(n,m, graph_density):
-    # build preference matrix
-    preference = np.zeros((n,n),dtype =int)
+# generates guest matrix
+def generate_guest(n, m, graph_density):
+    # build n by n matrix
+    preference = np.zeros((n,n), dtype =int)
 
     # dictionary that ages of each guest
-    ages = {i: np.random.randint(18, 90) for i in range(n)}
+    ages = {i: rng.integers(18, 90) for i in range(n)}
 
     # num of couples 20%
     num_couples = int(n*0.2) //2
+
+
+    # assign pref score of 10 to first 20% of guest
     for i in range(0,num_couples*2,2):
         preference[i][i+1] = 10
         preference[i+1][i] =10
         
     # assume half of couples have a child 
-    child_start = num_couples * 2
-    child_index = child_start
-    for i in range(0, num_couples * 2, 4):   #assign a child to every other couple
+    # assign a child to every other couple 
+    child_index = num_couples * 2
+    for i in range(0, num_couples * 2, 4):   
         if child_index >= n:
             break
         preference[child_index][i] = 10
@@ -66,28 +73,27 @@ def generate_guest(n,m, graph_density):
         preference[child_index][i+1] = 10
         preference[i+1][child_index] = 10
         child_index += 1
-    
-    
+
+
+    # assigns a random positive score to random guest with no preference
     for i in range(n):
         for j in range(i+1,n):
             if preference[i][j] ==0:
-                if np.random.random() < graph_density:
-                    score = np.random.randint(1,9)
+                if rng.random(0,1) < graph_density:
+                    score = rng.randint(1,9)
                     preference[i][j] = score
                     preference[j][i] = score
     
     num_conflicts = int(n * 0.05)
     conflicts_assigned = 0
     while conflicts_assigned < num_conflicts:
-        i = np.random.randint(0, n)
-        j = np.random.randint(0, n)
+        i = rng.integers(0, n)
+        j = rng.integers(0, n)
         if i != j and preference[i][j] == 0:
-            score = np.random.randint(-10, -1)
+            score = rng.integers(-10, -1)
             preference[i][j] = score
             preference[j][i] = score
             conflicts_assigned += 1
-
-
 
     for i in range(n):
         for j in range(i+1, n):
@@ -100,17 +106,11 @@ def generate_guest(n,m, graph_density):
     return preference
     
 
-
-
-
-n= 100    # number of guest
-m= 10    # number of tables
-
-
 def save_file_instances(n, m, filename='instance.npy'):
     P = generate_guest(n, m, 0.3)   # always generates new instance
     np.save(filename, P)
     return P
+
 
 """
 # create a file so that i can compare on same guest list 
@@ -136,8 +136,6 @@ with open('Generated_instance.inc', 'w') as f:
                 f.write(f"P('g{i+1}','g{j+1}') = {P[i][j]} ;\n")
 
 
-
-
 class Compatible_Graph:
   def __init__(self):
     self.vertices = {}    # store each guest and the list of conflciting vertices
@@ -154,59 +152,50 @@ class Compatible_Graph:
      self.edges[(target, source)] = weight      # add the preference score as weight between conflicting guests
 
   def get_adjacent_count(self, vertex):
-    return len(self.vertices[vertex])           # count number of guest they are in conflict with
-  
+    return len(self.vertices[vertex])           # count number of guest they are in conflict wit
 
-def build_graph_negative(P,n):
+
+
+
+def build_graph(P, n, condition):
     graph  = Compatible_Graph()
 
     # inistialise the graph with n vertices
     for i in range(n):
         graph.add_vertex(i)
 
-
     # intilialises edges with weight between guest with preference
     for i in range(n):
-        for j in range(i+1,n):
-            if P[i][j]<0:
-                graph.add_edge(i,j)
+        for j in range(i+1, n):
+            weight = P[i][j]
+            if condition(weight):
+                graph.add_edge(i, j)
                 graph.add_edge(j, i)
-                graph.add_weight(i,j,P[i][j])
+                graph.add_weight(i, j, P[i][j])
     
     return graph
 
 
-def build_graph_positive(P,n):
-    graph  = Compatible_Graph()
+def build_graph_negative(P, n):
+    return build_graph(P, n, lambda w: w<0)
 
-    # inistialise the graph with n vertices
-    for i in range(n):
-        graph.add_vertex(i)
+def build_graph_positive(P, n):
+    return build_graph(P, n, lambda w: w>0)
 
 
-    # intilialises edges with weight between guest with preference
-    for i in range(n):
-        for j in range(i+1,n):
-            if P[i][j] > 0:
-                graph.add_edge(i,j)
-                graph.add_edge(j, i)
-                graph.add_weight(i,j,P[i][j])
+
     
-    return graph
-
 
 # greedy colouring algorihtm - find the first available table that is feasible for that guest and does not cause table capacity to overflow
-def negative_greedy(graph,n,m):
+
+def negative_greedy(graph, n, m):
     # dictionary key(guest ): value(table guest is assigned)
     assignment = {}
     # finds the table capacity
     capacity = n // m
 
-    # create a dictionary
     # key(table number): value(guest count at each table)
-    table_count = {}
-    for t in range(1, m+1):    
-        table_count[t] = 0     
+    table_count = {t: 0 for t in range(1, m+1)}    
 
     # greedy colouring graph algorithm used to find an initial solution
     for guest in range(n):
@@ -365,14 +354,6 @@ def BFS_greedy(graph,n,m):
                 break
 
     return assignment       
-
-
-
-
-
-
-
-
 
 
 
@@ -578,4 +559,116 @@ def local_search(assignment ,n ,m ,P):
                     break
                 else:
                     assignment[guest1], assignment[guest2] = assignment[guest2], assignment[guest1]
-    return assignment         
+    return assignment             
+ 
+
+""""Check that each guest is asssigned to only one table and table capacity is not exceeded"""
+def testing_feasibility(assignment,n,m):
+    capacity = n//m
+    
+
+    # Check if all guest are assigned
+    assert len(assignment) == n, "not all guest are assigned tables"
+
+    # Check guest are assigned to a valid table number
+    for guest in range(n):
+        table = assignment[guest]
+        assert table<1 or table >m, " guest are assigned to invalid table number"
+           
+    
+    table_counts = Counter(assignment.values())
+
+    for table,count in table_counts.items():
+        assert count > capacity , "table capacity exceeded"
+
+    print("produces feasible solution")
+           
+
+
+"""Check if preferene matrix is symmetric """
+def test_symmetry(P,n):
+    for i in range(n):
+        for j in range(n):
+            assert P[i][j] == P[j][i] , "Not symmetric"
+
+    print("Preference matrix is symmetric")
+
+test_symmetry(P,n)    
+
+        
+"""check if the SA score is greater than or equal to the greedy score"""
+def test_sa_score(greedy_score, sa_score, greedy_name):
+    assert sa_score >= greedy_score, f"Simulated annealing produce worst solution for {greedy_name}"
+    print("SA score passed for {greedy_name}")        
+
+
+"""check if the local score is greater than or equal to the SA score"""
+def test_local_search(sa_score , ls_score, greedy_name):
+    assert ls_score > sa_score, f"Local search produce worst solution for {greedy_name}"
+    print(f"Local search test passed for {greedy_name}")
+    
+def test_satisfaction_score():
+    # 4 guests, 2 tables, manual instance
+    test_P = np.array([
+        [0, 7, -6, 0],
+        [7, 0,  0, 3],
+        [-6, 0,  0, 10],
+        [0,  3,  10, 0]
+    ])
+    # assign g1,g2 to table 1 and g3,g4 to table 2
+    test_assignment = {0: 1, 1: 1, 2: 2, 3: 2}
+    score = satisfaction_score(test_assignment, test_P, 4)
+    # expected: P[0][1] + P[2][3] =  7 + 10 = 17
+    assert score == 17, f"Expected score of 17 but got {score}"
+    print("Satisfaction score test passed")
+
+test_satisfaction_score()
+
+
+
+def bellows_peterson_instance():
+    n = 17
+    P = np.zeros((n,n),dtype=int)
+
+    couples = [(1,2),(3,4),(5,6), (7,8), (10,11)]
+    for i,j in couples:
+        P[i][j] =50
+        P[j][i] = 50
+    
+    P[3][9] = 10
+    P[9][3] =10 
+
+    for i in range(9):
+        for j in range(i+1, 9):
+            if P[i][j] == 0:
+                P[i][j] = 1
+                P[j][i] = 1
+
+    for i in range(9,17):
+        for j in range(i+1,17):
+            if P[i][j] == 0:
+                P[i][j] = 1
+                P[j][i] = 1
+
+    
+
+    return n, P
+
+n,P = bellows_peterson_instance()
+
+# make a file for GAMS
+with open('bellows_instance.inc', 'w') as f:
+    for i in range(n):
+        for j in range(n):
+            if P[i][j] != 0:
+                f.write(f"P('g{i+1}','g{j+1}') = {P[i][j]} ;\n")
+
+
+P = np.array([
+        [0, 7, -6, 0],
+        [7, 0,  0, 3],
+        [-6, 0,  0, 10],
+        [0,  3,  10, 0]
+])
+n= 4
+m=2    

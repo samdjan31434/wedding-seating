@@ -46,45 +46,89 @@ def age_score(age_diff):
         return -10
 
 # generates guest matrix
-def generate_guest(n, m, graph_density):
+def generate_guest(n, m, graph_density, difficulty):
     # build n by n matrix
     preference = np.zeros((n,n), dtype =int)
 
-    # dictionary that ages of each guest
-    ages = {i: rng.integers(18, 90) for i in range(n)}
+    # dictionary for ages of each guest from 18 to 90
+    # normally distributed at 34
+    ages = {
+    i: int(min(90, max(4, rng.normal(34, 10))))
+    for i in range(n)}
 
-    # num of couples 20%
-    num_couples = int(n*0.2) //2
+    young_children  = []    # age 0 to 7 sit with parents
+    teenagers = []   # age 8 to 17 sit at their own table
+    adults = []  # singles and couples
 
+    for i in range(n):
+        if ages[i] <= 7:
+            young_children.append(i)
+        elif ages[i] <= 17:
+            teenagers.append(i)
+        else:
+            adults.append(i)
 
-    # assign pref score of 10 to first 20% of guest
-    for i in range(0,num_couples*2,2):
-        preference[i][i+1] = 10
-        preference[i+1][i] =10
+   
+    if difficulty == "easy":
+        # create a sparse matrix
+        num_couples = int(len(adults)*0.1) // 2
+        conflict_rate  =  0.01
+        use_age_score = False
+    elif difficulty == "medium":
+        # assume children sit at own table
+        num_couples = int(len(adults)*0.2) // 2
+        conflict_rate = 0.02
+        use_age_score = True
+    elif difficulty == "realistic":
+        # children sit with parent wedding 
+        num_couples = int(len(adults)*0.2) // 2
+        conflict_rate = 0.05
+        use_age_score = True
+    elif difficulty =="hard":
+        num_couples = int(len(adults)* 0.3) // 2
+        conflict_rate = 0.1
+        use_age_score = True
+
         
-    # assume half of couples have a child 
-    # assign a child to every other couple 
-    child_index = num_couples * 2
-    for i in range(0, num_couples * 2, 4):   
-        if child_index >= n:
+    
+    
+    couple_pairs = []
+    for i in range(0, num_couples * 2, 2):
+        if i + 1 >= len(adults):
             break
-        preference[child_index][i] = 10
-        preference[i][child_index] = 10
-        preference[child_index][i+1] = 10
-        preference[i+1][child_index] = 10
-        child_index += 1
+        g1 = adults[i]
+        g2 = adults[i+1]
+        preference[g1][g2] = 10
+        preference[g2][g1] = 10
+        couple_pairs.append((g1, g2))
+        
+
+    if difficulty != 'easy':    
+        # assume half of couples have a child 
+        # assign a child to every other couple 
+        child_index = num_couples * 2
+        for i in range(0, num_couples * 2, 4):   
+            if child_index >= n:
+                break
+            preference[child_index][i] = 10
+            preference[i][child_index] = 10
+            preference[child_index][i+1] = 10
+            preference[i+1][child_index] = 10
+            child_index += 1
 
 
     # assigns a random positive score to random guest with no preference
     for i in range(n):
         for j in range(i+1,n):
             if preference[i][j] ==0:
-                if rng.random(0,1) < graph_density:
-                    score = rng.randint(1,9)
+                if np.random.random() < graph_density:
+                    score = np.random.randint(1, 9)
                     preference[i][j] = score
                     preference[j][i] = score
     
-    num_conflicts = int(n * 0.05)
+
+    # assing conflicting guest
+    num_conflicts = int(n * conflict_rate)
     conflicts_assigned = 0
     while conflicts_assigned < num_conflicts:
         i = rng.integers(0, n)
@@ -95,13 +139,15 @@ def generate_guest(n, m, graph_density):
             preference[j][i] = score
             conflicts_assigned += 1
 
-    for i in range(n):
-        for j in range(i+1, n):
-            if preference[i][j] == 0:
-                age_diff = abs(ages[i] - ages[j])
-                score = age_score(age_diff)
-                preference[i][j] = score
-                preference[j][i] = score
+    # group remaining guest based on ages
+    if use_age_score:
+        for i in range(n):
+            for j in range(i+1, n):
+                if preference[i][j] == 0:
+                    age_diff = abs(ages[i] - ages[j])
+                    score = age_score(age_diff)
+                    preference[i][j] = score
+                    preference[j][i] = score
 
     return preference
     
@@ -243,7 +289,7 @@ def mixed_greedy(n,m, P):
 
         for table in range(1,m+1):
 
-            if table_count[table]< capacity:
+            if table_count[table] < capacity:
                 score  =0
                 for neighbours, table_assigned in assignment.items():
                     if table == table_assigned:
@@ -327,7 +373,7 @@ def BFS_greedy(graph,n,m):
 
     queue = [start_guest]
 
-    while len(assignment)<n:
+    while len(assignment) < n:
         guest = queue.pop(0)
         if guest in visited:
             continue
@@ -353,7 +399,137 @@ def BFS_greedy(graph,n,m):
                 queue.append(guest)
                 break
 
-    return assignment       
+    return assignment      
+
+
+def DSATUR(graph,n,m):
+    assignment = {}
+    capacity = n // m
+    table_count = {}
+    for t in range(1, m+1):
+        table_count[t] = 0
+
+
+    # saturation degree - number of different table assigned to neighbouring guest
+    saturation = {}
+    for guest in range(n):
+        saturation[guest] = 0
+
+    # break ties by storing the number of conflict for each guest
+    conflict_count  = {}
+    for guest in range(n):
+        conflict_count[guest] = graph.get_adjacent_count(guest)
+
+    unnassigned  = set(range(n))
+
+    while unnassigned:
+
+        # find the guest with the highest saturation and break ties by looking at conflict count
+        best_guest = None
+        largest_satur = -1
+        highest_conflict = -1
+        for guest in unnassigned:
+            if (saturation[guest]> largest_satur) or (saturation[guest] == largest_satur and conflict_count[guest] > highest_conflict):
+                best_guest = guest
+                highest_conflict = conflict_count[guest]
+                largest_satur = saturation[guest]
+
+        # used to find lowest table number which has not conflicting guest and is not full
+        used_tables = set()
+        for neighbour in graph.vertices[best_guest]:
+            if neighbour in assignment:
+                used_tables.add(assignment[neighbour])
+
+        table = 1
+        while table <= m:
+            if table not in used_tables and table_count[table] < capacity:
+                break
+            table += 1
+            if table > m:
+                table = min(table_count,key= table_count.get)
+                break
+
+        # assing guest to table        
+        assignment[best_guest] = table
+        table_count[table] += 1
+        unnassigned.remove(best_guest)
+
+        for neighbour in graph.vertics[best_guest]:
+            if neighbour in unnassigned:
+                neighbour_tables = set()
+                for neigh_table in graph.vertices[neighbour]:
+                    if neigh_table in assignment:
+                        neighbour_tables.add(assignment[neigh_table])
+                saturation[neighbour] = len(neighbour_tables)
+
+
+        return assignment 
+
+
+
+def DSATUR_positive_greedy(graph,n,m,P):
+    assignment = {}
+    capacity = n // m
+    table_count = {}
+    for t in range(1, m+1):
+        table_count[t] = 0
+
+
+    # saturation degree - number of different table assigned to neighbouring guest
+    saturation = {}
+    for guest in range(n):
+        saturation[guest] = 0
+
+    # break ties by storing the number of conflict for each guest
+    conflict_count  = {}
+    for guest in range(n):
+        conflict_count[guest] = graph.get_adjacent_count(guest)
+
+    unassigned  = set(range(n))
+
+    while unassigned:
+
+        # find the guest with the highest saturation and break ties by looking at conflict count
+        best_guest = None
+        largest_satur = -1
+        highest_conflict = -1
+        for guest in unassigned:
+            if (saturation[guest]> largest_satur) or (saturation[guest] == largest_satur and conflict_count[guest] > highest_conflict):
+                best_guest = guest
+                highest_conflict = conflict_count[guest]
+                largest_satur = saturation[guest]
+
+        for table in range(1, m+1):
+            if table_count[table] < capacity:
+                score = 0
+                for neighbour in graph.vertices[best_guest]:
+                    if neighbour in assignment:
+                        if assignment[neighbour] == table:
+                            score += P[best_guest][neighbour]
+                if score > best_score:
+                    best_score = score
+                    best_table = table
+
+        # assign guest to best table
+        assignment[best_guest] = best_table
+        table_count[best_table] += 1
+        unassigned.remove(best_guest)
+        
+        
+        # update saturation of unassigned positive neighbours
+        for neighbour in graph.vertices[best_guest]:
+            if neighbour in unassigned:
+                neighbour_tables = set()
+                for nn in graph.vertices[neighbour]:
+                    if nn in assignment:
+                        neighbour_tables.add(assignment[nn])
+                saturation[neighbour] = len(neighbour_tables)
+
+    return assignment
+
+
+
+
 
 
 
@@ -502,6 +678,7 @@ bfs_sa_state = simulated_annealing(bfs_assignment, n, m, P,bfs_temp)
 bfs_sa_score = satisfaction_score(bfs_sa_state, P, n)
 print(f"Satisfaction score with bfs: {bfs_sa_score}")
 """
+
 
 
 def create_table_guest(state):
@@ -654,6 +831,9 @@ def bellows_peterson_instance():
 
     return n, P
 
+
+"""
+
 n,P = bellows_peterson_instance()
 
 # make a file for GAMS
@@ -671,4 +851,84 @@ P = np.array([
         [0,  3,  10, 0]
 ])
 n= 4
-m=2    
+m=2
+"""
+
+
+
+neg_assignment = negative_greedy(build_graph_negative(P, n), n, m)
+neg_initial_score = satisfaction_score(neg_assignment, P, n)
+neg_temp = initial_temp_cal(neg_assignment, 200, n)
+neg_sa_state = simulated_annealing(neg_assignment, n, m, P, neg_temp)
+neg_sa_score = satisfaction_score(neg_sa_state, P, n)
+neg_ls_state = local_search(neg_sa_state, n, m, P)
+neg_ls_score = satisfaction_score(neg_ls_state, P, n)
+
+print(f"Initial satisfaction score with negative greedy: {neg_initial_score}")
+print(f"Satisfaction score with negative greedy: {neg_sa_score}")
+print(f"Satisfaction after local search for negative greedy: {neg_ls_score}")
+
+
+mix_assignment = mixed_greedy(n, m, P)
+mix_initial_score = satisfaction_score(mix_assignment, P, n)
+mix_temp = initial_temp_cal(mix_assignment, 200, n)
+mix_sa_state = simulated_annealing(mix_assignment, n, m, P, mix_temp)
+mix_sa_score = satisfaction_score(mix_sa_state, P, n)
+mix_ls_state = local_search(mix_sa_state, n, m, P)
+mix_ls_score = satisfaction_score(mix_ls_state, P, n)
+
+print(f"initial satisfaction score with mix greedy: {mix_initial_score}")
+print(f"Satisfaction score with mix greedy: {mix_sa_score}")
+print(f"Satisfaction after local search for negative greedy: {mix_ls_score}")
+
+
+pos_assignment = ordered_positive_greedy(n, m, P)
+pos_initial_score = satisfaction_score(pos_assignment, P, n)
+pos_temp = initial_temp_cal(pos_assignment, 200, n)
+pos_sa_state = simulated_annealing(pos_assignment, n, m, P, pos_temp)
+pos_sa_score = satisfaction_score(pos_sa_state, P, n)
+pos_ls_state = local_search(pos_sa_state, n, m, P)
+pos_ls_score = satisfaction_score(pos_ls_state, P, n)
+
+print(f"initial satisfaction score with positive greedy: {pos_initial_score}")
+print(f"Satisfaction score with positive greedy: {pos_sa_score}")
+print(f"Satisfaction after local search for negative greedy: {pos_ls_score}")
+
+
+
+bfs_assignment = BFS_greedy(build_graph_positive(P, n), n, m)
+bfs_initial_score = satisfaction_score(bfs_assignment, P, n)
+bfs_temp = initial_temp_cal(bfs_assignment, 100, n)
+bfs_sa_state = simulated_annealing(bfs_assignment, n, m, P, bfs_temp)
+bfs_sa_score = satisfaction_score(bfs_sa_state, P, n)
+bfs_ls_state = local_search(bfs_sa_state, n, m, P)
+bfs_ls_score = satisfaction_score(bfs_ls_state, P, n)
+
+print(f"initial satisfaction score with positive greedy: {bfs_initial_score}")
+print(f"Satisfaction score with bfs greedy: {bfs_sa_score}")
+print(f"Satisfaction after local search for negative greedy: {bfs_ls_score}")
+
+dsatur_assignment = BFS_greedy(build_graph_negative(P, n), n, m)
+dsatur_initial_score = satisfaction_score(dsatur_assignment, P, n)
+dsatur_temp = initial_temp_cal(dsatur_assignment, 100, n)
+dsatur_sa_state = simulated_annealing(dsatur_assignment, n, m, P, bfs_temp)
+dsatur_sa_score = satisfaction_score(dsatur_sa_state, P, n)
+dsatur_ls_state = local_search(dsatur_sa_state, n, m, P)
+dsatur_ls_score = satisfaction_score(dsatur_ls_state, P, n)
+
+print(f"initial satisfaction score with dsature: {dsatur_initial_score}")
+print(f"Satisfaction score with dsatur: {dsatur_sa_score}")
+print(f"Satisfaction after local search for dsatur: {dsatur_ls_score}")
+
+
+dsatur_pos_assignment = BFS_greedy(build_graph_positive(P, n), n, m)
+dsatur_pos_initial_score = satisfaction_score(dsatur_pos_assignment, P, n)
+dsatur_pos_temp = initial_temp_cal(dsatur_pos_assignment, 100, n)
+dsatur_pos_sa_state = simulated_annealing(dsatur_pos_assignment, n, m, P, bfs_temp)
+dsatur_pos_sa_score = satisfaction_score(dsatur_pos_sa_state, P, n)
+dsatur_pos_ls_state = local_search(dsatur_pos_sa_state, n, m, P)
+dsatur_pos_ls_score = satisfaction_score(dsatur_pos_ls_state, P, n)
+
+print(f"initial satisfaction score with dsature: {dsatur_pos_initial_score}")
+print(f"Satisfaction score with dsatur: {dsatur_pos_sa_score}")
+print(f"Satisfaction after local search for dsatur: {dsatur_pos_ls_score}")

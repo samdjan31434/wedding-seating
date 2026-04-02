@@ -8,28 +8,9 @@ from collections import Counter
 
 rng = np.random.default_rng()
 
-n= 100    # number of guest
-m= 10    # number of tables
+n = 100    # number of guest
+m = 10    # number of tables
 
-"""
-# create guest and assign random score to some of them 
-def generate_guest(n,m):
-    Preference = np.zeros((n,n),dtype =int)
-
-    # assume about 25 % are couple that must sit together
-    for i in range(0, n//4, 2):
-        Preference[i][i+1] = 10
-        Preference[i+1][i] = 10
-    
-    for guest in range(n):
-        i = np.random.randint(0,n)
-        j = np.random.randint(0,n)
-        if i!=j and Preference[i][j] ==0:
-            random_score = np.random.randint(-10,10)
-            Preference[i][j] = random_score
-            Preference[j][i] = random_score
-    
-    return Preference   """
 
 def age_score(age_diff):
     if age_diff <= 5:
@@ -46,7 +27,7 @@ def age_score(age_diff):
         return -10
 
 # generates guest matrix
-def generate_guest(n, m, graph_density, difficulty):
+def generate_guest(n, graph_density, difficulty):
     # build n by n matrix
     preference = np.zeros((n,n), dtype =int)
 
@@ -57,40 +38,35 @@ def generate_guest(n, m, graph_density, difficulty):
     for i in range(n)}
 
     young_children  = []    # age 0 to 7 sit with parents
-    teenagers = []   # age 8 to 17 sit at their own table
+    teen = []   # age 8 to 17 sit at their own table
     adults = []  # singles and couples
 
     for i in range(n):
         if ages[i] <= 7:
             young_children.append(i)
         elif ages[i] <= 17:
-            teenagers.append(i)
+            teen.append(i)
         else:
             adults.append(i)
 
    
     if difficulty == "easy":
-        # create a sparse matrix
+        # create a sparse matrix, assume no children and dont care for ages
         num_couples = int(len(adults)*0.1) // 2
         conflict_rate  =  0.01
-        use_age_score = False
     elif difficulty == "medium":
-        # assume children sit at own table
-        num_couples = int(len(adults)*0.2) // 2
+        # assume children sit at own table, care for ages
+        num_couples = int(len(adults)*0.15) // 2
         conflict_rate = 0.02
-        use_age_score = True
     elif difficulty == "realistic":
         # children sit with parent wedding 
         num_couples = int(len(adults)*0.2) // 2
         conflict_rate = 0.05
-        use_age_score = True
     elif difficulty =="hard":
         num_couples = int(len(adults)* 0.3) // 2
         conflict_rate = 0.1
-        use_age_score = True
 
         
-    
     
     couple_pairs = []
     for i in range(0, num_couples * 2, 2):
@@ -101,33 +77,156 @@ def generate_guest(n, m, graph_density, difficulty):
         preference[g1][g2] = 10
         preference[g2][g1] = 10
         couple_pairs.append((g1, g2))
+
+
+    if difficulty == "easy":
+        for i in range(n):
+            for j in range(i+1, n):
+                if preference[i][j] == 0:
+                    if np.random.random() < graph_density:
+                        score = np.random.randint(1, 9)
+                        preference[i][j] = score
+                        preference[j][i] = score
         
+        num_conflicts = int(n * conflict_rate)
+        conflicts_assigned = 0
+        while conflicts_assigned < num_conflicts:
+            i = rng.integers(0, n)
+            j = rng.integers(0, n)
+            if i != j and preference[i][j] == 0:
+                score = rng.integers(-10, -1)
+                preference[i][j] = score
+                preference[j][i] = score
+                conflicts_assigned += 1
 
-    if difficulty != 'easy':    
-        # assume half of couples have a child 
-        # assign a child to every other couple 
-        child_index = num_couples * 2
-        for i in range(0, num_couples * 2, 4):   
-            if child_index >= n:
-                break
-            preference[child_index][i] = 10
-            preference[i][child_index] = 10
-            preference[child_index][i+1] = 10
-            preference[i+1][child_index] = 10
-            child_index += 1
+        return preference
+
+        
+    if difficulty == "medium":    
+        
+        for i in range(len(teen)):
+            for j in range(i+1, len(teen)):
+                guest1 = teen[i]
+                guest2 = teen[j]   
+                if preference[guest1][guest2] == 0:
+                    preference[guest1][guest2] = 6
+                    preference[guest2][guest1] = 6
+
+        for i in range(len(young_children)):
+            for j in range(i+1, len(young_children)):
+                guest1 = young_children[i]
+                guest2 = young_children[j]
+                if preference[guest1][guest2] == 0:
+                    preference[guest1][guest2] = 6
+                    preference[guest2][guest1] = 6 
 
 
-    # assigns a random positive score to random guest with no preference
+        # try to prevent adult and children to sit together
+        for child in young_children:
+            for adult in adults:
+                if preference[child][adult] == 0:
+                    preference[child][adult] = -5
+                    preference[adult][child] = -5
+
+        couple_guests = set()
+        for g1, g2 in couple_pairs:
+            couple_guests.add(g1)
+            couple_guests.add(g2)
+
+        single_adults = []
+        for a in adults:
+            if a not in couple_guests:   
+                single_adults.append(a)
+
+        for g1, g2 in couple_pairs:
+            for single in single_adults:
+                if preference[g1][single] == 0:
+                    preference[g1][single] = -3
+                    preference[single][g1] = -3
+                if preference[g2][single] == 0:
+                    preference[g2][single] = -3
+                    preference[single][g2] = -3
+
+        for i in range(n):
+            for j in range(i+1, n):
+                if preference[i][j] == 0:
+                    if np.random.random() < graph_density:
+                        score = np.random.randint(1, 9)
+                        preference[i][j] = score
+                        preference[j][i] = score
+
+        num_conflicts = int(n * conflict_rate)
+        conflicts_assigned = 0
+        while conflicts_assigned < num_conflicts:
+            i = rng.integers(0, n)
+            j = rng.integers(0, n)
+            if i != j and preference[i][j] == 0:
+                score = rng.integers(-10, -1)
+                preference[i][j] = score
+                preference[j][i] = score
+                conflicts_assigned += 1
+
+        
+        for i in range(n):
+            for j in range(i+1, n):
+                if preference[i][j] == 0:
+                    age_diff = abs(ages[i] - ages[j])
+                    score = age_score(age_diff)
+                    preference[i][j] = score
+                    preference[j][i] = score
+
+        return preference
+
+
+
+    # hard and realistics
+    child_index = 0
+    half_couples = len(couple_pairs) // 2
+    for parent1, parent2 in couple_pairs[:half_couples]:
+        if child_index >= len(young_children):
+            break
+        child = young_children[child_index]
+        preference[child][parent1] = 10
+        preference[parent1][child] = 10
+        preference[child][parent2] = 10
+        preference[parent2][child] = 10
+        child_index += 1
+
+    for i in range(len(teen)):
+        for j in range(i+1, len(teen)):
+            teen1 = teen[i]
+            teen2 = teen[j]   
+            if preference[teen1][teen2] == 0:
+                preference[teen1][teen2] = 6
+                preference[teen2][teen1] = 6
+
+    couple_guests = set()
+    for g1, g2 in couple_pairs:
+        couple_guests.add(g1)
+        couple_guests.add(g2)
+
+    single_adults = []
+    for a in adults:
+        if a not in couple_guests:   
+            single_adults.append(a)
+
+    for g1, g2 in couple_pairs:
+        for single in single_adults:
+            if preference[g1][single] == 0:
+                preference[g1][single] = -3
+                preference[single][g1] = -3
+            if preference[g2][single] == 0:
+                preference[g2][single] = -3
+                preference[single][g2] = -3
+
     for i in range(n):
-        for j in range(i+1,n):
-            if preference[i][j] ==0:
+        for j in range(i+1, n):
+            if preference[i][j] == 0:
                 if np.random.random() < graph_density:
                     score = np.random.randint(1, 9)
                     preference[i][j] = score
                     preference[j][i] = score
-    
 
-    # assing conflicting guest
     num_conflicts = int(n * conflict_rate)
     conflicts_assigned = 0
     while conflicts_assigned < num_conflicts:
@@ -139,21 +238,19 @@ def generate_guest(n, m, graph_density, difficulty):
             preference[j][i] = score
             conflicts_assigned += 1
 
-    # group remaining guest based on ages
-    if use_age_score:
-        for i in range(n):
-            for j in range(i+1, n):
-                if preference[i][j] == 0:
-                    age_diff = abs(ages[i] - ages[j])
-                    score = age_score(age_diff)
-                    preference[i][j] = score
-                    preference[j][i] = score
+    
+    for i in range(n):
+        for j in range(i+1, n):
+            if preference[i][j] == 0:
+                age_diff = abs(ages[i] - ages[j])
+                score = age_score(age_diff)
+                preference[i][j] = score
+                preference[j][i] = score
 
     return preference
     
-
 def save_file_instances(n, m, filename='instance.npy'):
-    P = generate_guest(n, m, 0.3)   # always generates new instance
+    P = generate_guest(n, 0.3, "easy")   # generates new instance
     np.save(filename, P)
     return P
 
@@ -201,8 +298,6 @@ class Compatible_Graph:
     return len(self.vertices[vertex])           # count number of guest they are in conflict wit
 
 
-
-
 def build_graph(P, n, condition):
     graph  = Compatible_Graph()
 
@@ -229,10 +324,12 @@ def build_graph_positive(P, n):
     return build_graph(P, n, lambda w: w>0)
 
 
-
-    
-
 # greedy colouring algorihtm - find the first available table that is feasible for that guest and does not cause table capacity to overflow
+def initialize(m):
+    # create a dictionary
+    # key(table number): value(guest count at each table)
+    return {t: 0 for t in range(1,m+1)}
+
 
 def negative_greedy(graph, n, m):
     # dictionary key(guest ): value(table guest is assigned)
@@ -240,8 +337,7 @@ def negative_greedy(graph, n, m):
     # finds the table capacity
     capacity = n // m
 
-    # key(table number): value(guest count at each table)
-    table_count = {t: 0 for t in range(1, m+1)}    
+    table_count = initialize(m)
 
     # greedy colouring graph algorithm used to find an initial solution
     for guest in range(n):
@@ -276,11 +372,7 @@ def mixed_greedy(n,m, P):
     # finds the table capacity
     capacity = n // m
 
-    # create a dictionary
-    # key(table number): value(guest count at each table)
-    table_count = {}
-    for t in range(1, m+1):    
-        table_count[t] = 0     
+    table_count = initialize(m)    
    
 
     for guest in range(n):
@@ -310,19 +402,15 @@ def ordered_positive_greedy(n,m,P):
     assignment = {}
     # finds the table capacity
     capacity = n // m
-
-    # create a dictionary
-    # key(table number): value(guest count at each table)
-    table_count = {}
-    for t in range(1, m+1):    
-        table_count[t] = 0  
+   
+    table_count = initialize(m)
     
     sums = {}
     for i in range(n):
-        total =0
+        total = 0 
         for j in range(n):
             if P[i][j]> 0:
-                total+= P[i][j]
+                total += P[i][j]
         sums[i] = total
 
 
@@ -355,11 +443,7 @@ def BFS_greedy(graph,n,m):
     # finds the table capacity
     capacity = n // m
 
-    # create a dictionary
-    # key(table number): value(guest count at each table)
-    table_count = {}
-    for t in range(1, m+1):    
-        table_count[t] = 0  
+    table_count = initialize(m)
 
     visited =set()
     current_table = 1
@@ -405,9 +489,8 @@ def BFS_greedy(graph,n,m):
 def DSATUR(graph,n,m):
     assignment = {}
     capacity = n // m
-    table_count = {}
-    for t in range(1, m+1):
-        table_count[t] = 0
+    
+    table_count = initialize(m)
 
 
     # saturation degree - number of different table assigned to neighbouring guest
@@ -466,13 +549,11 @@ def DSATUR(graph,n,m):
         return assignment 
 
 
-
 def DSATUR_positive_greedy(graph,n,m,P):
     assignment = {}
     capacity = n // m
-    table_count = {}
-    for t in range(1, m+1):
-        table_count[t] = 0
+    
+    table_count = initialize(m)
 
 
     # saturation degree - number of different table assigned to neighbouring guest
@@ -528,13 +609,8 @@ def DSATUR_positive_greedy(graph,n,m,P):
     return assignment
 
 
-
-
-
-
-
 # calculate the total satisfaction score 
-def satisfaction_score(assignment,P ,n):
+def satisfaction_score(assignment, P, n):
    total_score = 0
    for i in range(n):
      for j in range(i+1, n):
@@ -594,35 +670,31 @@ def initial_temp_cal(assignment,num_samples,n,acceptance_rate =0.8):
 # variable and parameter used in simmulated annealing
 
 
-
 def simulated_annealing(initial_assignment,n,m,P, T):
+    time_limit = 5
+    best_state = initial_assignment.copy()
+    stagnation = 0
+    v = 1
+    il_limit = 100 
+    x = initial_assignment.copy()
+    start_time = time.time()
+    max_stagnation  = 100
+    gamma = 0.90
+        
+    # Simmulated annealing that continue while temperture is not zero or the time limit is not reached
+    while T>0 and (time.time()- start_time)< time_limit:
+        for il in range(il_limit):
+            y = x.copy()
+            y = generate_neighbour_state(y, n, v)
+            f_x = satisfaction_score(x,P,n)
+            f_y = satisfaction_score(y,P,n)
 
-        time_limit = 5
-        best_state = initial_assignment.copy()
-        stagnation = 0
-        v = 1
-        start_time = time.time()
-        max_stagnation  = 100
-        gamma = 0.90
-        il_limit = 100 
-        x = initial_assignment.copy()
-             
-
-
-        # Simmulated annealing that continue while temperture is not zero or the time limit is not reached
-        while T>0 and (time.time()- start_time)< time_limit:
-            for il in range(il_limit):
-                y = x.copy()
-                y = generate_neighbour_state(y,n,v)
-                f_x = satisfaction_score(x,P,n)
-                f_y = satisfaction_score(y,P,n)
-
-                if f_y > f_x:
-                    x = y
-                    stagnation =0
-                    v =1
-                    if f_y > satisfaction_score(best_state, P , n):
-                        best_state = y.copy()
+            if f_y > f_x:
+                x = y
+                stagnation =0
+                v =1
+                if f_y > satisfaction_score(best_state, P , n):
+                    best_state = y.copy()
                 else:
                     r = random.random()
                     try:
@@ -642,59 +714,11 @@ def simulated_annealing(initial_assignment,n,m,P, T):
                             v = 1
             T = T * gamma  
 
-        return best_state
+    return best_state
 
 
-
-"""
-neg_assignment = negative_greedy(build_graph_negative(P, n),n,m)
-neg_initial_score = satisfaction_score(neg_assignment, P, n)
-neg_temp = initial_temp_cal(neg_assignment, 200 , n)
-neg_sa_state = simulated_annealing(neg_assignment,n,m,P,neg_temp)
-neg_sa_score = satisfaction_score(neg_sa_state, P, n)
-print(f"Satisfaction score with negative greedy: {neg_sa_score}")
-
-
-mix_assignment = mixed_greedy(n, m, P)
-mix_initial_score = satisfaction_score(mix_assignment, P, n)
-mix_temp = initial_temp_cal(mix_assignment,200,n)
-mix_sa_state = simulated_annealing(mix_assignment, n, m, P,mix_temp)
-mix_sa_score = satisfaction_score(mix_sa_state, P, n)
-print(f"Satisfaction score with mix greedy: {mix_sa_score}")
-
-
-pos_assignment = ordered_positive_greedy(n, m, P)
-pos_initial_score = satisfaction_score(pos_assignment, P, n)
-ordered_temp  = initial_temp_cal(pos_assignment,200,n)
-pos_sa_state = simulated_annealing(pos_assignment, n, m, P, ordered_temp)
-pos_sa_score = satisfaction_score(pos_sa_state, P, n)
-print(f"Satisfaction score with positive greedy: {pos_sa_score}")
-
-
-bfs_assignment = BFS_greedy(build_graph_positive(P,n),n,m)
-bfs_initial_score = satisfaction_score(bfs_assignment, P, n)
-bfs_temp = initial_temp_cal(bfs_assignment, 100 , n)
-bfs_sa_state = simulated_annealing(bfs_assignment, n, m, P,bfs_temp)
-bfs_sa_score = satisfaction_score(bfs_sa_state, P, n)
-print(f"Satisfaction score with bfs: {bfs_sa_score}")
-"""
-
-
-
-def create_table_guest(state):
-    table_guest = {}
-    for table in range(1,m+1):
-        table_guest[table] = []
-
-    for g in range(n):
-        table_guest[state[g]].append(g)
-    
-    return table_guest
-
-        
-
-
-def each_table_satifaction(table_guest, P ):
+# calculate the satisfaction score for each table
+def satifaction_per_table(table_guest, P ):
     current_scores = {}
     for table,guest  in table_guest.items():
         total = 0
@@ -709,33 +733,34 @@ def each_table_satifaction(table_guest, P ):
 
 
 def local_search(assignment ,n ,m ,P):
-    current_scores = each_table_satifaction(create_table_guest(assignment),P)
-    sorted_table_scoring = sorted(current_scores,key= current_scores.get)
-    worst_table1 = sorted_table_scoring[0]
-    worst_table2 = sorted_table_scoring[1]
     improved = True
     while improved:
         improved = False
 
-        table_guests = {}
-        for table in range(1, m+1):
-            table_guests[table] = []
+        table_guests = {table: [] for table in range(1, m+1)}
         for g in range(n):
             table_guests[assignment[g]].append(g)
-        current_scores = each_table_satifaction(table_guests,P)
-        sorted_table_scoring = sorted(current_scores,key= current_scores.get)
-        worst_table1 = sorted_table_scoring[0]
-        worst_table2 = sorted_table_scoring[1]
+
+        current_scores = satifaction_per_table(table_guests,P)
+        sorted_table_scoring = sorted(current_scores, key=current_scores.get)
+        worst_table1, worst_table2 = sorted_table_scoring[:2]
+
+        before_score = satisfaction_score(assignment, P, n)
+
         for guest1 in table_guests[worst_table1]:
             for guest2 in table_guests[worst_table2]:
-                before_score = satisfaction_score(assignment,P,n)
+                
                 assignment[guest1], assignment[guest2] = assignment[guest2], assignment[guest1]
                 after_score = satisfaction_score(assignment, P, n)
+
                 if after_score> before_score:
                     improved = True
                     break
                 else:
                     assignment[guest1], assignment[guest2] = assignment[guest2], assignment[guest1]
+            if improved:
+                break
+
     return assignment             
  
 
@@ -761,16 +786,12 @@ def testing_feasibility(assignment,n,m):
     print("produces feasible solution")
            
 
-
 """Check if preferene matrix is symmetric """
-def test_symmetry(P,n):
-    for i in range(n):
-        for j in range(n):
-            assert P[i][j] == P[j][i] , "Not symmetric"
-
+def test_symmetry(P):
+    assert np.array_equal(P, P.T), " not symmetric"
     print("Preference matrix is symmetric")
 
-test_symmetry(P,n)    
+test_symmetry(P)    
 
         
 """check if the SA score is greater than or equal to the greedy score"""
@@ -802,7 +823,6 @@ def test_satisfaction_score():
 test_satisfaction_score()
 
 
-
 def bellows_peterson_instance():
     n = 17
     P = np.zeros((n,n),dtype=int)
@@ -826,8 +846,6 @@ def bellows_peterson_instance():
             if P[i][j] == 0:
                 P[i][j] = 1
                 P[j][i] = 1
-
-    
 
     return n, P
 
@@ -879,7 +897,7 @@ mix_ls_score = satisfaction_score(mix_ls_state, P, n)
 
 print(f"initial satisfaction score with mix greedy: {mix_initial_score}")
 print(f"Satisfaction score with mix greedy: {mix_sa_score}")
-print(f"Satisfaction after local search for negative greedy: {mix_ls_score}")
+print(f"Satisfaction after local search for mix greedy: {mix_ls_score}")
 
 
 pos_assignment = ordered_positive_greedy(n, m, P)
@@ -892,8 +910,7 @@ pos_ls_score = satisfaction_score(pos_ls_state, P, n)
 
 print(f"initial satisfaction score with positive greedy: {pos_initial_score}")
 print(f"Satisfaction score with positive greedy: {pos_sa_score}")
-print(f"Satisfaction after local search for negative greedy: {pos_ls_score}")
-
+print(f"Satisfaction after local search for positive greedy: {pos_ls_score}")
 
 
 bfs_assignment = BFS_greedy(build_graph_positive(P, n), n, m)
@@ -904,14 +921,14 @@ bfs_sa_score = satisfaction_score(bfs_sa_state, P, n)
 bfs_ls_state = local_search(bfs_sa_state, n, m, P)
 bfs_ls_score = satisfaction_score(bfs_ls_state, P, n)
 
-print(f"initial satisfaction score with positive greedy: {bfs_initial_score}")
+print(f"initial satisfaction score with bfs greedy: {bfs_initial_score}")
 print(f"Satisfaction score with bfs greedy: {bfs_sa_score}")
-print(f"Satisfaction after local search for negative greedy: {bfs_ls_score}")
+print(f"Satisfaction after local search for bfs greedy: {bfs_ls_score}")
 
 dsatur_assignment = BFS_greedy(build_graph_negative(P, n), n, m)
 dsatur_initial_score = satisfaction_score(dsatur_assignment, P, n)
 dsatur_temp = initial_temp_cal(dsatur_assignment, 100, n)
-dsatur_sa_state = simulated_annealing(dsatur_assignment, n, m, P, bfs_temp)
+dsatur_sa_state = simulated_annealing(dsatur_assignment, n, m, P, dsatur_temp)
 dsatur_sa_score = satisfaction_score(dsatur_sa_state, P, n)
 dsatur_ls_state = local_search(dsatur_sa_state, n, m, P)
 dsatur_ls_score = satisfaction_score(dsatur_ls_state, P, n)
@@ -924,11 +941,12 @@ print(f"Satisfaction after local search for dsatur: {dsatur_ls_score}")
 dsatur_pos_assignment = BFS_greedy(build_graph_positive(P, n), n, m)
 dsatur_pos_initial_score = satisfaction_score(dsatur_pos_assignment, P, n)
 dsatur_pos_temp = initial_temp_cal(dsatur_pos_assignment, 100, n)
-dsatur_pos_sa_state = simulated_annealing(dsatur_pos_assignment, n, m, P, bfs_temp)
+dsatur_pos_sa_state = simulated_annealing(dsatur_pos_assignment, n, m, P, dsatur_pos_temp)
 dsatur_pos_sa_score = satisfaction_score(dsatur_pos_sa_state, P, n)
 dsatur_pos_ls_state = local_search(dsatur_pos_sa_state, n, m, P)
 dsatur_pos_ls_score = satisfaction_score(dsatur_pos_ls_state, P, n)
 
-print(f"initial satisfaction score with dsature: {dsatur_pos_initial_score}")
-print(f"Satisfaction score with dsatur: {dsatur_pos_sa_score}")
-print(f"Satisfaction after local search for dsatur: {dsatur_pos_ls_score}")
+
+print(f"initial satisfaction score with dsature pos: {dsatur_pos_initial_score}")
+print(f"Satisfaction score with dsatur pos: {dsatur_pos_sa_score}")
+print(f"Satisfaction after local search for dsatur pos: {dsatur_pos_ls_score}")

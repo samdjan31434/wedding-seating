@@ -8,8 +8,8 @@ from collections import Counter
 
 rng = np.random.default_rng()
 
-n = 100    # number of guest
-m = 10    # number of tables
+n = 10    # number of guest
+m = 2   # number of tables
 
 
 def age_score(age_diff):
@@ -26,6 +26,45 @@ def age_score(age_diff):
     else:
         return -10
 
+def assign_random_positive_preferences(preference, n, graph_density):
+    max_pairs = (n * (n-1)) // 2
+    
+    existing_pairs = 0
+    for i in range(n):
+        for j in range(i+1, n):
+            if preference[i][j] != 0:
+                existing_pairs += 1
+    
+    random_positive_pairs = int(max_pairs * graph_density) - existing_pairs
+    count = 0
+
+    for i in range(n):
+        for j in range(i+1, n):
+            if preference[i][j] == 0:
+                if count < random_positive_pairs:
+                    score = np.random.randint(1, 9)
+                    preference[i][j] = score
+                    preference[j][i] = score
+                    count += 1
+
+    return preference
+
+
+def create_couple_pairs(num_couples, adults,preference):
+    couple_pairs = []
+    for i in range(0, num_couples * 2, 2):
+        if i + 1 >= len(adults):
+            break
+        g1 = adults[i]
+        g2 = adults[i+1]
+        preference[g1][g2] = 10
+        preference[g2][g1] = 10
+        couple_pairs.append((g1, g2))
+
+    return couple_pairs, preference
+
+
+
 # generates guest matrix
 def generate_guest(n, graph_density, difficulty):
     # build n by n matrix
@@ -34,7 +73,7 @@ def generate_guest(n, graph_density, difficulty):
     # dictionary for ages of each guest from 18 to 90
     # normally distributed at 34
     ages = {
-    i: int(min(90, max(4, rng.normal(34, 10))))
+    i: int(min(100, max(4, rng.normal(34, 10))))
     for i in range(n)}
 
     young_children  = []    # age 0 to 7 sit with parents
@@ -52,42 +91,26 @@ def generate_guest(n, graph_density, difficulty):
    
     if difficulty == "easy":
         # create a sparse matrix, assume no children and dont care for ages
-        num_couples = int(len(adults)*0.1) // 2
+        num_couples = int(len(adults)*0.2) // 2
         conflict_rate  =  0.01
     elif difficulty == "medium":
         # assume children sit at own table, care for ages
-        num_couples = int(len(adults)*0.15) // 2
+        num_couples = int(len(adults)*0.3) // 2
         conflict_rate = 0.02
     elif difficulty == "realistic":
         # children sit with parent wedding 
-        num_couples = int(len(adults)*0.2) // 2
+        num_couples = int(len(adults)*0.55) // 2
         conflict_rate = 0.05
     elif difficulty =="hard":
-        num_couples = int(len(adults)* 0.3) // 2
+        num_couples = int(len(adults)* 0.55) // 2
         conflict_rate = 0.1
 
         
-    
-    couple_pairs = []
-    for i in range(0, num_couples * 2, 2):
-        if i + 1 >= len(adults):
-            break
-        g1 = adults[i]
-        g2 = adults[i+1]
-        preference[g1][g2] = 10
-        preference[g2][g1] = 10
-        couple_pairs.append((g1, g2))
 
 
     if difficulty == "easy":
-        for i in range(n):
-            for j in range(i+1, n):
-                if preference[i][j] == 0:
-                    if np.random.random() < graph_density:
-                        score = np.random.randint(1, 9)
-                        preference[i][j] = score
-                        preference[j][i] = score
         
+        # assign conflict
         num_conflicts = int(n * conflict_rate)
         conflicts_assigned = 0
         while conflicts_assigned < num_conflicts:
@@ -99,35 +122,23 @@ def generate_guest(n, graph_density, difficulty):
                 preference[j][i] = score
                 conflicts_assigned += 1
 
+        preference = assign_random_positive_preferences(preference, n, graph_density)
+
         return preference
 
         
-    if difficulty == "medium":    
+    if difficulty == "medium": 
+
+        couple_pairs , preference = create_couple_pairs(num_couples, adults, preference)
         
-        for i in range(len(teen)):
-            for j in range(i+1, len(teen)):
-                guest1 = teen[i]
-                guest2 = teen[j]   
-                if preference[guest1][guest2] == 0:
-                    preference[guest1][guest2] = 6
-                    preference[guest2][guest1] = 6
-
-        for i in range(len(young_children)):
-            for j in range(i+1, len(young_children)):
-                guest1 = young_children[i]
-                guest2 = young_children[j]
-                if preference[guest1][guest2] == 0:
-                    preference[guest1][guest2] = 6
-                    preference[guest2][guest1] = 6 
-
-
-        # try to prevent adult and children to sit together
-        for child in young_children:
+        # try to make teenager not sit with adults
+        for teenager in teen:
             for adult in adults:
-                if preference[child][adult] == 0:
-                    preference[child][adult] = -5
-                    preference[adult][child] = -5
-
+                if preference[teenager][adult] == 0:
+                    preference[teenager][adult] = -5
+                    preference[adult][teenager] = -5
+        
+        # discourage single adult to sit with couples
         couple_guests = set()
         for g1, g2 in couple_pairs:
             couple_guests.add(g1)
@@ -146,15 +157,8 @@ def generate_guest(n, graph_density, difficulty):
                 if preference[g2][single] == 0:
                     preference[g2][single] = -3
                     preference[single][g2] = -3
-
-        for i in range(n):
-            for j in range(i+1, n):
-                if preference[i][j] == 0:
-                    if np.random.random() < graph_density:
-                        score = np.random.randint(1, 9)
-                        preference[i][j] = score
-                        preference[j][i] = score
-
+        
+        # assign conflicts
         num_conflicts = int(n * conflict_rate)
         conflicts_assigned = 0
         while conflicts_assigned < num_conflicts:
@@ -166,7 +170,9 @@ def generate_guest(n, graph_density, difficulty):
                 preference[j][i] = score
                 conflicts_assigned += 1
 
+        preference = assign_random_positive_preferences(preference, n, graph_density)
         
+        # age similarity for the remaining neutral pairs of guest
         for i in range(n):
             for j in range(i+1, n):
                 if preference[i][j] == 0:
@@ -174,7 +180,7 @@ def generate_guest(n, graph_density, difficulty):
                     score = age_score(age_diff)
                     preference[i][j] = score
                     preference[j][i] = score
-
+ 
         return preference
 
 
@@ -192,13 +198,13 @@ def generate_guest(n, graph_density, difficulty):
         preference[parent2][child] = 10
         child_index += 1
 
-    for i in range(len(teen)):
-        for j in range(i+1, len(teen)):
-            teen1 = teen[i]
-            teen2 = teen[j]   
-            if preference[teen1][teen2] == 0:
-                preference[teen1][teen2] = 6
-                preference[teen2][teen1] = 6
+
+    # try to make teenager sit at own table and not sit with adults
+    for teenager in teen:
+        for adult in adults:
+            if preference[teenager][adult] == 0:
+                preference[teenager][adult] = -5
+                preference[adult][teenager] = -5
 
     couple_guests = set()
     for g1, g2 in couple_pairs:
@@ -219,14 +225,8 @@ def generate_guest(n, graph_density, difficulty):
                 preference[g2][single] = -3
                 preference[single][g2] = -3
 
-    for i in range(n):
-        for j in range(i+1, n):
-            if preference[i][j] == 0:
-                if np.random.random() < graph_density:
-                    score = np.random.randint(1, 9)
-                    preference[i][j] = score
-                    preference[j][i] = score
-
+    
+    # assings conflict
     num_conflicts = int(n * conflict_rate)
     conflicts_assigned = 0
     while conflicts_assigned < num_conflicts:
@@ -238,7 +238,9 @@ def generate_guest(n, graph_density, difficulty):
             preference[j][i] = score
             conflicts_assigned += 1
 
-    
+    preference = assign_random_positive_preferences(preference, n, graph_density)
+
+    # age scoring for remaining neutral pairs
     for i in range(n):
         for j in range(i+1, n):
             if preference[i][j] == 0:
@@ -249,8 +251,8 @@ def generate_guest(n, graph_density, difficulty):
 
     return preference
     
-def save_file_instances(n, m, filename='instance.npy'):
-    P = generate_guest(n, 0.3, "easy")   # generates new instance
+def save_file_instances(n, filename='instance.npy'):
+    P = generate_guest(n, 0.1, "easy")   # generates new instance
     np.save(filename, P)
     return P
 
@@ -269,7 +271,7 @@ def save_file_instances(n, m, filename='instance.npy'):
     return np.load(filename)  """
 
 
-P = save_file_instances(n, m)
+P = save_file_instances(n)
 
 # save the file as .inc to use in GAMS
 with open('Generated_instance.inc', 'w') as f:
@@ -671,7 +673,7 @@ def initial_temp_cal(assignment,num_samples,n,acceptance_rate =0.8):
 
 
 def simulated_annealing(initial_assignment,n,m,P, T):
-    time_limit = 5
+    time_limit = 10
     best_state = initial_assignment.copy()
     stagnation = 0
     v = 1

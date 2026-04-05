@@ -4,12 +4,13 @@ import random
 import math
 import os
 from collections import Counter
+import csv
 
 
 rng = np.random.default_rng()
 
-n = 10    # number of guest
-m = 2   # number of tables
+n = 50    # number of guest
+m = 10   # number of tables
 
 
 def age_score(age_diff):
@@ -50,7 +51,7 @@ def assign_random_positive_preferences(preference, n, graph_density):
     return preference
 
 
-def create_couple_pairs(num_couples, adults,preference):
+def create_couple_pairs(num_couples, adults, preference):
     couple_pairs = []
     for i in range(0, num_couples * 2, 2):
         if i + 1 >= len(adults):
@@ -250,25 +251,26 @@ def generate_guest(n, graph_density, difficulty):
                 preference[j][i] = score
 
     return preference
-    
+
+
+"""    
 def save_file_instances(n, filename='instance.npy'):
-    P = generate_guest(n, 0.1, "easy")   # generates new instance
+    P = generate_guest(n, 0.1, "easy")   
     np.save(filename, P)
     return P
-
-
 """
-# create a file so that i can compare on same guest list 
-def save_file_instances(n, m, filename='instance.npy'):
-    # create a new file if it does exit
+
+
+
+
+def save_file_instances(n, filename='instance.npy'):
+    """ create a new file if it does exit """
     if not os.path.exists(filename):
-        P = generate_guest(n, m)
+        P = generate_guest(n, 0.1, "easy")
         np.save(filename, P)
-        print(f"New instance generated and saved to {filename}")
-    else:
-        print(f"Loading existing instance from {filename}")
-    
-    return np.load(filename)  """
+
+
+    return np.load(filename)
 
 
 P = save_file_instances(n)
@@ -320,9 +322,11 @@ def build_graph(P, n, condition):
 
 
 def build_graph_negative(P, n):
+    """return a graph with negative weights"""
     return build_graph(P, n, lambda w: w<0)
 
 def build_graph_positive(P, n):
+    """"return a graph with positive weight"""
     return build_graph(P, n, lambda w: w>0)
 
 
@@ -361,7 +365,7 @@ def negative_greedy(graph, n, m):
                 table = min(table_count, key=table_count.get)
                 break
 
-        # assing guest to a table
+        # assigns a guest to a table
         assignment[guest] = table
         table_count[table] += 1
 
@@ -442,7 +446,7 @@ def ordered_positive_greedy(n,m,P):
 def BFS_greedy(graph,n,m):
      # dictionary key(guest ): value(table guest is assigned)
     assignment = {}
-    # finds the table capacity
+    # computes the table capacity
     capacity = n // m
 
     table_count = initialize(m)
@@ -489,6 +493,7 @@ def BFS_greedy(graph,n,m):
 
 
 def DSATUR(graph,n,m):
+    """performs dsatur heuristic on a negative weighted graph"""
     assignment = {}
     capacity = n // m
     
@@ -539,7 +544,8 @@ def DSATUR(graph,n,m):
         table_count[table] += 1
         unnassigned.remove(best_guest)
 
-        for neighbour in graph.vertics[best_guest]:
+        # update saturation of neighberouing guests
+        for neighbour in graph.vertices[best_guest]:
             if neighbour in unnassigned:
                 neighbour_tables = set()
                 for neigh_table in graph.vertices[neighbour]:
@@ -548,7 +554,7 @@ def DSATUR(graph,n,m):
                 saturation[neighbour] = len(neighbour_tables)
 
 
-        return assignment 
+    return assignment 
 
 
 def DSATUR_positive_greedy(graph,n,m,P):
@@ -622,13 +628,13 @@ def satisfaction_score(assignment, P, n):
 
 
 # swap operator, changes assigment of guest at different tables
-def generate_neighbour_state(assignment ,n,v):
+def generate_neighbour_state(assignment , n, v):
     new_assignment  = assignment.copy()
 
     # v is the number of swap operation to do 
     for i in range(v):
-        guest1 = random.randint(0,n-1)
-        guest2 = random.randint(0,n-1)
+        guest1 = random.randint(0, n-1)
+        guest2 = random.randint(0, n-1)
 
         while new_assignment[guest1] == new_assignment[guest2]:
             guest2 = random.randint(0, n-1)
@@ -638,19 +644,26 @@ def generate_neighbour_state(assignment ,n,v):
 
 
 
-def initial_temp_cal(assignment,num_samples,n,acceptance_rate =0.8): 
+def initial_temp_cal(assignment, num_samples, n, acceptance_rate=0.8): 
     neg_change = []
     current_assignment = assignment.copy()
 
     for i in range(num_samples):
         guest1 = random.randint(0, n-1)
         guest2 = random.randint(0, n-1)
+        retries = 0
         while current_assignment[guest1] == current_assignment[guest2]:
             guest2 = random.randint(0, n-1)
+            retries += 1
+            if retries > 100:
+                break
 
-        score_before = satisfaction_score(current_assignment,P,n)
+        if current_assignment[guest1] == current_assignment[guest2]:
+            continue 
+               
+        score_before = satisfaction_score(current_assignment, P, n)
         current_assignment[guest1] , current_assignment[guest2] = current_assignment[guest2],current_assignment[guest1]
-        score_after  = satisfaction_score(current_assignment,P,n)
+        score_after  = satisfaction_score(current_assignment, P, n)
 
         if (score_after -score_before)< 0:
             neg_change.append(abs(score_after-score_before))
@@ -672,8 +685,8 @@ def initial_temp_cal(assignment,num_samples,n,acceptance_rate =0.8):
 # variable and parameter used in simmulated annealing
 
 
-def simulated_annealing(initial_assignment,n,m,P, T):
-    time_limit = 10
+def simulated_annealing(initial_assignment, n, m, P, T):
+    time_limit = 5
     best_state = initial_assignment.copy()
     stagnation = 0
     v = 1
@@ -688,14 +701,14 @@ def simulated_annealing(initial_assignment,n,m,P, T):
         for il in range(il_limit):
             y = x.copy()
             y = generate_neighbour_state(y, n, v)
-            f_x = satisfaction_score(x,P,n)
-            f_y = satisfaction_score(y,P,n)
+            f_x = satisfaction_score(x, P, n)
+            f_y = satisfaction_score(y, P, n)
 
             if f_y > f_x:
                 x = y
                 stagnation =0
-                v =1
-                if f_y > satisfaction_score(best_state, P , n):
+                v = 1
+                if f_y > satisfaction_score(best_state, P, n):
                     best_state = y.copy()
                 else:
                     r = random.random()
@@ -710,9 +723,9 @@ def simulated_annealing(initial_assignment,n,m,P, T):
                     else:
                         stagnation = stagnation + 1
                     if stagnation == max_stagnation:
-                        stagnation =0
+                        stagnation = 0
                         v += 1
-                        if v>m:
+                        if v > m:
                             v = 1
             T = T * gamma  
 
@@ -720,21 +733,21 @@ def simulated_annealing(initial_assignment,n,m,P, T):
 
 
 # calculate the satisfaction score for each table
-def satifaction_per_table(table_guest, P ):
+def satifaction_per_table(table_guest, P):
     current_scores = {}
     for table,guest  in table_guest.items():
         total = 0
         for i in range(len(guest)):
-            for j in range(i+1,len(guest)):
+            for j in range(i+1, len(guest)):
                 guest1 = guest[i]
                 guest2 = guest[j]
-                total+= P[guest1][guest2]
+                total += P[guest1][guest2]
         current_scores[table] = total
 
     return current_scores            
 
 
-def local_search(assignment ,n ,m ,P):
+def local_search(assignment, n, m, P):
     improved = True
     while improved:
         improved = False
@@ -743,7 +756,7 @@ def local_search(assignment ,n ,m ,P):
         for g in range(n):
             table_guests[assignment[g]].append(g)
 
-        current_scores = satifaction_per_table(table_guests,P)
+        current_scores = satifaction_per_table(table_guests, P)
         sorted_table_scoring = sorted(current_scores, key=current_scores.get)
         worst_table1, worst_table2 = sorted_table_scoring[:2]
 
@@ -755,7 +768,7 @@ def local_search(assignment ,n ,m ,P):
                 assignment[guest1], assignment[guest2] = assignment[guest2], assignment[guest1]
                 after_score = satisfaction_score(assignment, P, n)
 
-                if after_score> before_score:
+                if after_score > before_score:
                     improved = True
                     break
                 else:
@@ -767,8 +780,8 @@ def local_search(assignment ,n ,m ,P):
  
 
 """"Check that each guest is asssigned to only one table and table capacity is not exceeded"""
-def testing_feasibility(assignment,n,m):
-    capacity = n//m
+def testing_feasibility(assignment, n, m):
+    capacity = n // m
     
 
     # Check if all guest are assigned
@@ -777,7 +790,7 @@ def testing_feasibility(assignment,n,m):
     # Check guest are assigned to a valid table number
     for guest in range(n):
         table = assignment[guest]
-        assert table<1 or table >m, " guest are assigned to invalid table number"
+        assert table < 1 or table > m, " guest are assigned to invalid table number"
            
     
     table_counts = Counter(assignment.values())
@@ -803,7 +816,7 @@ def test_sa_score(greedy_score, sa_score, greedy_name):
 
 
 """check if the local score is greater than or equal to the SA score"""
-def test_local_search(sa_score , ls_score, greedy_name):
+def test_local_search(sa_score, ls_score, greedy_name):
     assert ls_score > sa_score, f"Local search produce worst solution for {greedy_name}"
     print(f"Local search test passed for {greedy_name}")
     
@@ -827,7 +840,7 @@ test_satisfaction_score()
 
 def bellows_peterson_instance():
     n = 17
-    P = np.zeros((n,n),dtype=int)
+    P = np.zeros((n,n), dtype=int)
 
     couples = [(1,2),(3,4),(5,6), (7,8), (10,11)]
     for i,j in couples:
@@ -875,7 +888,7 @@ m=2
 """
 
 
-
+"""
 neg_assignment = negative_greedy(build_graph_negative(P, n), n, m)
 neg_initial_score = satisfaction_score(neg_assignment, P, n)
 neg_temp = initial_temp_cal(neg_assignment, 200, n)
@@ -927,7 +940,7 @@ print(f"initial satisfaction score with bfs greedy: {bfs_initial_score}")
 print(f"Satisfaction score with bfs greedy: {bfs_sa_score}")
 print(f"Satisfaction after local search for bfs greedy: {bfs_ls_score}")
 
-dsatur_assignment = BFS_greedy(build_graph_negative(P, n), n, m)
+dsatur_assignment = DSATUR(build_graph_negative(P, n), n, m)
 dsatur_initial_score = satisfaction_score(dsatur_assignment, P, n)
 dsatur_temp = initial_temp_cal(dsatur_assignment, 100, n)
 dsatur_sa_state = simulated_annealing(dsatur_assignment, n, m, P, dsatur_temp)
@@ -935,12 +948,12 @@ dsatur_sa_score = satisfaction_score(dsatur_sa_state, P, n)
 dsatur_ls_state = local_search(dsatur_sa_state, n, m, P)
 dsatur_ls_score = satisfaction_score(dsatur_ls_state, P, n)
 
-print(f"initial satisfaction score with dsature: {dsatur_initial_score}")
+print(f"initial satisfaction score with dsatur: {dsatur_initial_score}")
 print(f"Satisfaction score with dsatur: {dsatur_sa_score}")
 print(f"Satisfaction after local search for dsatur: {dsatur_ls_score}")
 
 
-dsatur_pos_assignment = BFS_greedy(build_graph_positive(P, n), n, m)
+dsatur_pos_assignment = DSATUR_positive_greedy(build_graph_positive(P, n), n, m)
 dsatur_pos_initial_score = satisfaction_score(dsatur_pos_assignment, P, n)
 dsatur_pos_temp = initial_temp_cal(dsatur_pos_assignment, 100, n)
 dsatur_pos_sa_state = simulated_annealing(dsatur_pos_assignment, n, m, P, dsatur_pos_temp)
@@ -949,6 +962,89 @@ dsatur_pos_ls_state = local_search(dsatur_pos_sa_state, n, m, P)
 dsatur_pos_ls_score = satisfaction_score(dsatur_pos_ls_state, P, n)
 
 
-print(f"initial satisfaction score with dsature pos: {dsatur_pos_initial_score}")
+print(f"initial satisfaction score with dsatur pos: {dsatur_pos_initial_score}")
 print(f"Satisfaction score with dsatur pos: {dsatur_pos_sa_score}")
 print(f"Satisfaction after local search for dsatur pos: {dsatur_pos_ls_score}")
+"""
+
+
+def run_three_seeds(initial_assignment, n, m, P):
+    scores = []
+    for seed in range(3):
+        random.seed(seed)
+        assignment_copy = initial_assignment.copy()
+        T_0 = initial_temp_cal(assignment_copy, 200, n)
+        sa_state = simulated_annealing(assignment_copy, n, m, P, T_0)
+        ls_state = local_search(sa_state, n, m, P)
+        score = satisfaction_score(ls_state, P, n)
+        scores.append(score)
+
+    best = max(scores)
+    average = round(sum(scores) / len(scores), 2)
+    worst = min(scores)
+
+    return best, average, worst
+
+def save_results_to_csv(results, ilp_score, best_possible, ilp_time, n, m, difficulty, filename='results.csv'):
+    
+    # check if file exists
+    file_exists = os.path.exists(filename)
+    
+    with open(filename, 'a', newline='') as f:
+        writer = csv.writer(f)
+        
+        # add header if file is new
+        if not file_exists:
+            writer.writerow([
+                'Guests', 'Tables', 'Difficulty',
+                'ILP Score', 'Best Possible', 'ILP Time',
+                'Method', 'Best', 'Average', 'Worst'
+            ])
+        for method, (best, avg, worst) in results.items():
+            writer.writerow([
+                n, m, difficulty,
+                ilp_score, best_possible, ilp_time,
+                method, best, round(avg, 2), worst
+            ])
+
+
+
+# result from gams file
+ilp_score =    110
+best_possible = 110
+ilp_time =   0 
+
+# run all five methods three times
+neg_best, neg_avg, neg_worst = run_three_seeds(
+    negative_greedy(build_graph_negative(P, n), n, m), n, m, P)
+print(f"Satisfaction after local search for negative greedy: {neg_avg}")
+
+mix_best, mix_avg, mix_worst = run_three_seeds(
+    mixed_greedy(n, m, P), n, m, P)
+print(f"Satisfaction after local search for mix greedy: {mix_avg}")
+
+pos_best, pos_avg, pos_worst = run_three_seeds(
+    ordered_positive_greedy(n, m, P), n, m, P)
+print(f"Satisfaction after local search for pos greedy: {pos_avg}")
+
+
+bfs_best, bfs_avg, bfs_worst = run_three_seeds(
+    BFS_greedy(build_graph_positive(P, n), n, m), n, m, P)
+print(f"Satisfaction after local search for bfs greedy: {bfs_avg}")
+
+
+dsatur_best, dsatur_avg, dsatur_worst = run_three_seeds(
+    DSATUR(build_graph_negative(P, n), n, m,), n, m, P)
+print(f"Satisfaction after local search for dsatur: {dsatur_avg}")
+
+
+results = {
+    'Negative Greedy':  (neg_best,    neg_avg,    neg_worst),
+    'Mixed Greedy':     (mix_best,    mix_avg,    mix_worst),
+    'Positive Ordered': (pos_best,    pos_avg,    pos_worst),
+    'BFS Greedy':       (bfs_best,    bfs_avg,    bfs_worst),
+    'DSATUR Greedy':    (dsatur_best, dsatur_avg, dsatur_worst)
+}
+
+
+save_results_to_csv(results, ilp_score, best_possible, ilp_time, n, m, "easy", filename='results.csv')

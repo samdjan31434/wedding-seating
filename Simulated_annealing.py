@@ -2,7 +2,6 @@ import time
 import math
 import random
 from Hueristic_algorithms import DSATUR
-from extra import satisfaction_score , local_search
 from Guest_Creations import generate_guest
 import numpy as np
 import csv
@@ -40,78 +39,90 @@ def generate_neighbour_state(assignment, n, v):
     return new_assignment
 
 
-def initial_temp_cal(assignment, num_samples, n, acceptance_rate = 0.8): 
+def initial_temp_cal(assignment, num_samples, n, P, acceptance_rate = 0.8): 
     neg_change = []
     current_assignment = assignment.copy()
 
-    for i in range(num_samples):
-        guest1 = random.randint(0, n-1)
-        guest2 = random.randint(0, n-1)
-        retries = 0
-        while current_assignment[guest1] == current_assignment[guest2]:
-            guest2 = random.randint(0, n-1)
-            retries += 1
-            if retries > 100:
-                break
-
-        if current_assignment[guest1] == current_assignment[guest2]:
-            continue 
-               
-        score_before = satisfaction_score(current_assignment, P, n)
-        current_assignment[guest1] , current_assignment[guest2] = current_assignment[guest2],current_assignment[guest1]
-        score_after  = satisfaction_score(current_assignment, P, n)
-
-        if (score_after -score_before)< 0:
-            neg_change.append(abs(score_after-score_before))
-        
-        current_assignment[guest1], current_assignment[guest2] = current_assignment[guest2],current_assignment[guest1]
-
-    if neg_change:
-        average_change = sum(neg_change) / len(neg_change)
+    unique_tables = set(assignment.values())
+    if len(unique_tables) <= 1:
+        return 1.0
     else:
-        average_change = 1 
 
-    T = average_change / (-math.log(acceptance_rate))
+        for i in range(num_samples):
+            guest1 = random.randint(0, n-1)
+            guest2 = random.randint(0, n-1)
+            retries = 0
+            while current_assignment[guest1] == current_assignment[guest2]:
+                guest2 = random.randint(0, n-1)
+                retries += 1
+                if retries > 100:
+                    break
 
-    return T
+            if current_assignment[guest1] == current_assignment[guest2]:
+                continue 
+                
+            score_before = satisfaction_score(current_assignment, P, n)
+            current_assignment[guest1] , current_assignment[guest2] = current_assignment[guest2],current_assignment[guest1]
+            score_after  = satisfaction_score(current_assignment, P, n)
+
+            if (score_after -score_before)< 0:
+                neg_change.append(abs(score_after-score_before))
+            
+            current_assignment[guest1], current_assignment[guest2] = current_assignment[guest2],current_assignment[guest1]
+
+        if neg_change:
+            average_change = sum(neg_change) / len(neg_change)
+        else:
+            average_change = 1 
+
+        T = average_change / (-math.log(acceptance_rate))
+
+        return T
 
 def simulated_annealing(initial_assignment, n, m, P, time_limit):
-    T = initial_temp_cal(initial_assignment, 200, n)
-    best_state = initial_assignment.copy()
+    x = initial_assignment.copy()
+    best_state = x.copy()
+    best_score = satisfaction_score(x, P, n)
     stagnation = 0
     v = 1
     il_limit = 100 
-    x = initial_assignment.copy()
+    T = initial_temp_cal(initial_assignment, 200, n, P)
     start_time = time.time()
     max_stagnation  = 100
-    gamma = 0.95
+    gamma = 0.9
+    if m == 1:
+        return initial_assignment
+    else:
         
-    # Simmulated annealing that continue while temperture is not zero or the time limit is not reached
-    while T > 0 and (time.time() - start_time) < time_limit:
-        for i in range(il_limit):
-            y = x.copy()
-            y = generate_neighbour_state(y, n, v)
-            f_x = satisfaction_score(x, P, n)
-            f_y = satisfaction_score(y, P, n)
+        # Simmulated annealing that continue while temperture is not zero or the time limit is not reached
+        while T > 1e-6 and (time.time() - start_time) < time_limit:
+            for i in range(il_limit):
+                y = generate_neighbour_state(x, n, v)
+                f_x = satisfaction_score(x, P, n)
+                f_y = satisfaction_score(y, P, n)
+                delta = f_y - f_x
 
-            if f_y > f_x:
-                x = y
-                stagnation = 0
-                v = 1
-                if f_y > satisfaction_score(best_state, P, n):
-                    best_state = y.copy()
+                if delta > 0:
+                    x = y
+                    stagnation = 0
+                    v = 1
+                    if f_y > best_score:
+                        best_state = y.copy()
+                        best_score = f_y
                 else:
                     r = random.random()
                     try:
-                        prob_y = 1 / (1 + math.exp(-(f_y - f_x) / T))
+                        prob_y = 1 / (1 + math.exp(-(delta) / T))
                     except OverflowError:
                         prob_y = 0
+
                     if prob_y > r :
                         x = y.copy()
                         stagnation = 0
                         v = 1
                     else:
                         stagnation = stagnation + 1
+
                     if stagnation == max_stagnation:
                         stagnation = 0
                         v += 1
@@ -123,7 +134,7 @@ def simulated_annealing(initial_assignment, n, m, P, time_limit):
 
 
 
-
+"""
 time_limits = [3, 5, 10, 30, 60]
 seeds = [20, 100, 300]
 
@@ -147,7 +158,7 @@ for n, m in zip(realistic_sizes, realistic_table_sizes):
 ls_easy_result = {}
 ls_realistic_result = {}
 
-"""
+
 # Easy
 for time_limit in time_limits:
     easy_SA_results[time_limit] = {}
@@ -163,19 +174,19 @@ for time_limit in time_limits:
             np.random.seed(seed)
 
             dsatur_assignment = DSATUR(P, n, m)
-            T0 = initial_temp_cal(dsatur_assignment, 200, n)
+            # T0 = initial_temp_cal(dsatur_assignment, 200, n, P)
             sa_state = simulated_annealing(dsatur_assignment, n, m, P, time_limit)
-            ls_state = local_search(sa_state, n, m, P)
+            #ls_state = local_search(sa_state, n, m, P)
 
             average_sa_scores.append(satisfaction_score(sa_state, P, n))
-            ls_average_scores.append(satisfaction_score(ls_state, P, n))
+            #ls_average_scores.append(satisfaction_score(ls_state, P, n))
 
         sa_avg = round(sum(average_sa_scores) / len(average_sa_scores), 2)
-        ls_avg = round(sum(ls_average_scores) / len(ls_average_scores), 2)
+        #ls_avg = round(sum(ls_average_scores) / len(ls_average_scores), 2)
 
         easy_SA_results[time_limit][n] = sa_avg
-        ls_easy_result[time_limit][n]  = ls_avg
-        print(f"Easy Time: {time_limit}s n={n} SA: {sa_avg} LS: {ls_avg}")
+        #ls_easy_result[time_limit][n]  = ls_avg
+        #print(f"Easy Time: {time_limit}s n={n} SA: {sa_avg} LS: {ls_avg}")
 
 
 with open('local_search_easy.csv', 'w', newline='') as f:
@@ -208,7 +219,7 @@ for time_limit in time_limits:
             random.seed(seed)
             np.random.seed(seed)
             dsatur_assignment = DSATUR(P, n, m)
-            T0 = initial_temp_cal(dsatur_assignment, 200, n)
+            # T0 = initial_temp_cal(dsatur_assignment, 200, n)
             sa_state = simulated_annealing(dsatur_assignment, n, m, P, time_limit)
             ls_state = local_search(sa_state, n, m, P)
             sa_scores.append(satisfaction_score(sa_state, P, n))
@@ -232,7 +243,7 @@ with open('local_search_realistic.csv', 'w', newline='') as f:
             row.append(realistic_SA_results[tl][size])
             row.append(ls_realistic_result[tl][size])
         writer.writerow(row)
-"""
+
 
 
 
@@ -270,6 +281,126 @@ plt.legend()
 plt.grid(True)
 plt.savefig('ls_comparison_realistic.png')
 plt.show()
+
+
+
+gamma_values = [0.80, 0.85, 0.90, 0.95, 0.99]
+seeds = [20, 100, 300]
+time_limit = 3
+
+easy_sizes      = [50,  80,  150, 200, 300]
+easy_m_sizes    = [5,   8,   15,  20,  30]
+
+realistic_sizes   = [20,  50,  80,  150, 200]
+realistic_m_sizes = [5,   5,   8,   15,  20]
+
+
+easy_instances = {}
+for n in easy_sizes:
+    easy_instances[n] = generate_guest(n, 0.1, 'easy', rng)
+
+realistic_instances = {}
+for n in realistic_sizes:
+    realistic_instances[n] = generate_guest(n, 0.4, 'realistic', rng)
+
+gamma_easy_results      = {}
+gamma_realistic_results = {}
+ 
+for gamma in gamma_values:
+    gamma_easy_results[gamma] = {}
+
+    for n, m in zip(easy_sizes, easy_m_sizes):
+        P = easy_instances[n]
+        scores = []
+
+        for seed in seeds:
+            random.seed(seed)
+            np.random.seed(seed)
+            dsatur_assignment = DSATUR(P, n, m)
+            T0 = initial_temp_cal(dsatur_assignment, 200, n, P)
+            sa_state = simulated_annealing(dsatur_assignment, n, m, P, time_limit, gamma)
+            score = satisfaction_score(sa_state, P, n)
+            scores.append(score)
+
+        average = round(sum(scores) / len(scores), 2)
+        gamma_easy_results[gamma][n] = average
+        print(f"Easy Gamma: {gamma} n={n} Avg: {average}")
+
+
+
+# Realistic 
+for gamma in gamma_values:
+    gamma_realistic_results[gamma] = {}
+
+    for n, m in zip(realistic_sizes, realistic_m_sizes):
+        P = realistic_instances[n]
+        scores = []
+
+        for seed in seeds:
+            random.seed(seed)
+            np.random.seed(seed)
+            dsatur_assignment = DSATUR(P, n, m)
+            T0       = initial_temp_cal(dsatur_assignment, 200, n, P)
+            sa_state = simulated_annealing(dsatur_assignment, n, m, P, time_limit, gamma)
+            score    = satisfaction_score(sa_state, P, n)
+            scores.append(score)
+
+        average = round(sum(scores) / len(scores), 2)
+        gamma_realistic_results[gamma][n] = average
+        print(f"Realistic Gamma: {gamma} n={n} Avg: {average}")
+
+
+with open('gamma_easy.csv', 'w', newline='') as f:
+    writer = csv.writer(f)
+    header = ['Gamma']
+    for n in easy_sizes:
+        header.append(f'n={n}')
+    writer.writerow(header)
+    for gamma in gamma_values:
+        row = [gamma]
+        for n in easy_sizes:
+            row.append(gamma_easy_results[gamma][n])
+        writer.writerow(row)
+
+with open('gamma_realistic.csv', 'w', newline='') as f:
+    writer = csv.writer(f)
+    header = ['Gamma']
+    for n in realistic_sizes:
+        header.append(f'n={n}')
+    writer.writerow(header)
+    for gamma in gamma_values:
+        row = [gamma]
+        for n in realistic_sizes:
+            row.append(gamma_realistic_results[gamma][n])
+        writer.writerow(row)
+
+easy_df = pd.read_csv('gamma_easy.csv')
+
+plt.figure(figsize=(10, 6))
+for col in easy_df.columns[1:]:
+    plt.plot(easy_df['Gamma'], easy_df[col], marker='o', label=col)
+plt.xlabel('Gamma value')
+plt.ylabel('Average satisfaction score')
+plt.title('Effect of gamma on DSATUR + SA — easy instances')
+plt.legend()
+plt.grid(True)
+plt.savefig('gamma_easy.png')
+plt.show()
+
+# Plot Realistic
+realistic_df = pd.read_csv('gamma_realistic.csv')
+
+plt.figure(figsize=(10, 6))
+for col in realistic_df.columns[1:]:
+    plt.plot(realistic_df['Gamma'], realistic_df[col], marker='o', label=col)
+plt.xlabel('Gamma value')
+plt.ylabel('Average satisfaction score')
+plt.title('Effect of gamma on DSATUR + SA — realistic instances')
+plt.legend()
+plt.grid(True)
+plt.savefig('gamma_realistic.png')
+plt.show()
+"""
 
 
 

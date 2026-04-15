@@ -70,7 +70,8 @@ def initialize(m):
     return {t: 0 for t in range(1,m+1)}
 
 
-def negative_greedy(graph, n, m):
+def negative_greedy(P, n, m):
+    graph = build_graph_negative(P, n)
     # dictionary key(guest ): value(table guest is assigned)
     assignment = {}
     # finds the table capacity
@@ -175,57 +176,9 @@ def ordered_positive_greedy(n,m,P):
 
     return assignment
 
-
-def BFS_greedy(graph,n,m):
-     # dictionary key(guest ): value(table guest is assigned)
-    assignment = {}
-    # computes the table capacity
-    capacity = n // m
-
-    table_count = initialize(m)
-
-    visited =set()
-    current_table = 1
-    start_guest  =0 
-    most_neighbours = 0
-    for i in range(n):
-        count = graph.get_adjacent_count(i)
-        if most_neighbours > count:
-            most_neighbours = count
-            start_guest = i
-
-    queue = [start_guest]
-
-    while len(assignment) < n:
-        guest = queue.pop(0)
-        if guest in visited:
-            continue
-
-        visited.add(guest)
-
-        if table_count[current_table]< capacity:
-            assignment[guest] = current_table
-            table_count[current_table] +=1
-        else:
-            current_table+=1 
-            if current_table>m:
-                current_table =m
-            assignment[guest] = current_table
-            table_count[current_table] += 1
-
-        for neighbour in graph.vertices[guest]:
-            if neighbour not in visited:
-                queue.append(neighbour)
-
-        for guest in range(n):
-            if guest not in visited:
-                queue.append(guest)
-                break
-
-    return assignment      
-
-
-def DSATUR(graph,n,m):
+     
+def DSATUR(P, n, m):
+    graph = build_graph_negative(P, n)
     """performs dsatur heuristic on a negative weighted graph"""
     assignment = {}
     capacity = n // m
@@ -290,7 +243,8 @@ def DSATUR(graph,n,m):
     return assignment 
 
 
-def DSATUR_positive_greedy(graph,n,m,P):
+def DSATUR_positive_greedy(P, n, m):
+    graph = build_graph_positive(P, n)
     assignment = {}
     capacity = n // m
     

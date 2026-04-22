@@ -1,13 +1,13 @@
 import time
 import math
 import random
-from Hueristic_algorithms import DSATUR
+from Hueristic_algorithms import DSATUR, ordered_positive_greedy
 from Guest_Creations import generate_guest
 import numpy as np
 import csv
-import random
 import matplotlib.pyplot as plt
 import pandas as pd
+from extra import local_search
 
 
 
@@ -65,7 +65,7 @@ def initial_temp_cal(assignment, num_samples, n, P, acceptance_rate = 0.8):
             current_assignment[guest1] , current_assignment[guest2] = current_assignment[guest2],current_assignment[guest1]
             score_after  = satisfaction_score(current_assignment, P, n)
 
-            if (score_after -score_before)< 0:
+            if (score_after - score_before)< 0:
                 neg_change.append(abs(score_after-score_before))
             
             current_assignment[guest1], current_assignment[guest2] = current_assignment[guest2],current_assignment[guest1]
@@ -79,17 +79,16 @@ def initial_temp_cal(assignment, num_samples, n, P, acceptance_rate = 0.8):
 
         return T
 
-def simulated_annealing(initial_assignment, n, m, P, time_limit):
+def simulated_annealing(initial_assignment, n, m, P, time_limit, gamma):
     x = initial_assignment.copy()
     best_state = x.copy()
     best_score = satisfaction_score(x, P, n)
     stagnation = 0
     v = 1
     il_limit = 100 
-    T = initial_temp_cal(initial_assignment, 200, n, P)
+    T = initial_temp_cal(initial_assignment, 100, n, P)
     start_time = time.time()
     max_stagnation  = 100
-    gamma = 0.9
     if m == 1:
         return initial_assignment
     else:
@@ -134,272 +133,247 @@ def simulated_annealing(initial_assignment, n, m, P, time_limit):
 
 
 
-"""
-time_limits = [3, 5, 10, 30, 60]
+
+
+
+
+
+time_limit = [3, 5, 10, 30, 60]
 seeds = [20, 100, 300]
 
-easy_sizes = [50, 200, 400]
-easy_table_sizes= [5, 20, 40]
-easy_SA_results = {}
+def run_time_experiment(difficulty, sizes, table_sizes, density):
+  
+    instances = {n: generate_guest(n, density, difficulty) for n in sizes}
+    np.save(f"{difficulty}_time_instances.npy", instances, allow_pickle=True)
 
-realistic_sizes = [20, 100, 200, 400]
-realistic_table_sizes = [2, 10, 20, 40]
-realistic_SA_results = {}
+    results = {tl: {} for tl in time_limit}
 
-easy_instance = {}
-for n, m in zip(easy_sizes, easy_table_sizes):
-    easy_instance[n] = generate_guest(n, 0.1, 'easy', rng)
+    for tl in time_limit:
+        for n, m in zip(sizes, table_sizes):
+            P = instances[n]
+            average_sa_scores = []
+            ls_average_scores = []
 
-realistic_instance = {}
-for n, m in zip(realistic_sizes, realistic_table_sizes):
-    realistic_instance[n] = generate_guest(n, 0.4, 'realistic', rng)
+            for seed in seeds:
+                random.seed(seed)
+                np.random.seed(seed)
 
+                dsatur_assignment = DSATUR(P, n, m)
+                sa_state = simulated_annealing(dsatur_assignment, n, m, P, tl, 0.9)
+                ls_state = local_search(sa_state, n, m, P)
 
-ls_easy_result = {}
-ls_realistic_result = {}
+                average_sa_scores.append(satisfaction_score(sa_state, P, n))
+                ls_average_scores.append(satisfaction_score(ls_state, P, n))
 
+            
+            results[tl][n] = {
+                "sa": round(sum(average_sa_scores) / len(average_sa_scores), 2),
+                "ls": round(sum(ls_average_scores) / len(ls_average_scores), 2),
+            }
+            print(f"Time {tl}s | n={n} | SA={results[tl][n]['sa']} | LS={results[tl][n]['ls']}")
 
-# Easy
-for time_limit in time_limits:
-    easy_SA_results[time_limit] = {}
-    ls_easy_result[time_limit] = {}
-
-    for n, m in zip(easy_sizes, easy_table_sizes ):
-        P = easy_instance[n]
-        average_sa_scores = []
-        ls_average_scores = []
-
-        for seed in seeds:
-            random.seed(seed)
-            np.random.seed(seed)
-
-            dsatur_assignment = DSATUR(P, n, m)
-            # T0 = initial_temp_cal(dsatur_assignment, 200, n, P)
-            sa_state = simulated_annealing(dsatur_assignment, n, m, P, time_limit)
-            #ls_state = local_search(sa_state, n, m, P)
-
-            average_sa_scores.append(satisfaction_score(sa_state, P, n))
-            #ls_average_scores.append(satisfaction_score(ls_state, P, n))
-
-        sa_avg = round(sum(average_sa_scores) / len(average_sa_scores), 2)
-        #ls_avg = round(sum(ls_average_scores) / len(ls_average_scores), 2)
-
-        easy_SA_results[time_limit][n] = sa_avg
-        #ls_easy_result[time_limit][n]  = ls_avg
-        #print(f"Easy Time: {time_limit}s n={n} SA: {sa_avg} LS: {ls_avg}")
+    return results
 
 
-with open('local_search_easy.csv', 'w', newline='') as f:
-    writer = csv.writer(f)
-    
-    header = ['Time Limit']
-    for size in easy_sizes:
-        header.append(f'n={size} SA')
-        header.append(f'n={size} LS')
-    writer.writerow(header)
-    
-    for i in time_limits:
-        row = [i]
-        for size in easy_sizes:
-            row.append(easy_SA_results[i][size])
-            row.append(ls_easy_result[i][size])
-        writer.writerow(row)
+def save_results(csv_filename, sizes, results):
+    with open(csv_filename, 'w', newline='') as f:
+        writer = csv.writer(f)
+
+        header = ['Time Limit']
+        for n in sizes:
+            header += [f'n={n} SA', f'n={n} LS']
+        writer.writerow(header)
+
+        for tl in time_limit:
+            row = [tl]
+            for n in sizes:
+                row += [results[tl][n]['sa'], results[tl][n]['ls']]
+            writer.writerow(row)
 
 
-for time_limit in time_limits:
-    realistic_SA_results[time_limit] = {}
-    ls_realistic_result[time_limit]  = {}
+def plot_results(csv_filename, sizes, title, png_filename):
+    df = pd.read_csv(csv_filename)
 
-    for n, m in zip(realistic_sizes, realistic_table_sizes):
-        P = realistic_instance[n]
-        sa_scores = []
-        ls_scores = []
+    plt.figure(figsize=(10, 6))
+    for n in sizes:
+        plt.plot(df['Time Limit'], df[f'n={n} SA'],
+                 marker='o', linestyle='--', label=f'n={n} SA')
+        plt.plot(df['Time Limit'], df[f'n={n} LS'],
+                 marker='s', linestyle='-', label=f'n={n} SA+LS')
 
-        for seed in seeds:
-            random.seed(seed)
-            np.random.seed(seed)
-            dsatur_assignment = DSATUR(P, n, m)
-            # T0 = initial_temp_cal(dsatur_assignment, 200, n)
-            sa_state = simulated_annealing(dsatur_assignment, n, m, P, time_limit)
-            ls_state = local_search(sa_state, n, m, P)
-            sa_scores.append(satisfaction_score(sa_state, P, n))
-            ls_scores.append(satisfaction_score(ls_state, P, n))
+    plt.xlabel('Time limit (seconds)')
+    plt.ylabel('Average satisfaction score')
+    plt.title(title)
+    plt.legend()
+    plt.grid(True)
+    plt.savefig(png_filename)
+    plt.show()
 
-        realistic_SA_results[time_limit][n] = round(sum(sa_scores) / len(sa_scores), 2)
-        ls_realistic_result[time_limit][n]  = round(sum(ls_scores) / len(ls_scores), 2)
-        print(f"Realistic Time: {time_limit}s n={n} SA: {realistic_SA_results[time_limit][n]} LS: {ls_realistic_result[time_limit][n]}")
+# Result for larger instances sizes
+def larger_result_time_limit():
+
+    easy_sizes = [100, 200, 300, 400]
+    easy_tables = [10, 20, 30, 40]
+
+    easy_results = run_time_experiment('easy', easy_sizes, easy_tables, 0.1)
+
+    save_results('larger_easy_time_results.csv', easy_sizes, easy_results)
+    plot_results('larger_easy_time_results.csv', easy_sizes,
+                'SA vs SA + Local Search (Easy)',
+                'larger_easy_time_plot.png')
 
 
-with open('local_search_realistic.csv', 'w', newline='') as f:
-    writer = csv.writer(f)
-    header = ['Time Limit']
-    for size in realistic_sizes:
-        header.append(f'n={size} SA')
-        header.append(f'n={size} LS')
-    writer.writerow(header)
-    for tl in time_limits:
-        row = [tl]
-        for size in realistic_sizes:
-            row.append(realistic_SA_results[tl][size])
-            row.append(ls_realistic_result[tl][size])
-        writer.writerow(row)
+    realistic_sizes = [100, 200, 300, 400]
+    realistic_tables = [10, 20, 30, 40]
+
+
+    realistic_results = run_time_experiment('realistic', realistic_sizes, realistic_tables, 0.4)
+
+    save_results('larger_realistic_time_results.csv', realistic_sizes, realistic_results)
+    plot_results('larger_realistic_time_results.csv', realistic_sizes,
+                'SA vs SA + Local Search (Realistic)',
+                'larger_realistic_time_plot.png')
+
+
+
+larger_result_time_limit()
 
 
 
 
-easy_df = pd.read_csv('local_search_easy.csv')
-
-plt.figure(figsize=(10, 6))
-for n in easy_sizes:
-    plt.plot(easy_df['Time Limit'], easy_df[f'n={n} SA'], 
-             marker='o', linestyle='--', label=f'n={n} SA')
-    plt.plot(easy_df['Time Limit'], easy_df[f'n={n} LS'], 
-             marker='s', linestyle='-', label=f'n={n} SA+LS')
-plt.xlabel('Time limit (seconds)')
-plt.ylabel('Average satisfaction score')
-plt.title('SA vs SA + Local Search for easy instances')
-plt.legend()
-plt.grid(True)
-plt.savefig('ls_comparison_easy.png')
-plt.show()   
 
 
+def result_easy_time_limit():
 
-# Realistic 
-realistic_df = pd.read_csv('local_search_realistic.csv')
+    easy_sizes = [20, 40, 60, 80]
+    easy_tables = [2, 4, 6, 8]
 
-plt.figure(figsize=(10, 6))
-for n in realistic_sizes:
-    plt.plot(realistic_df['Time Limit'], realistic_df[f'n={n} SA'], 
-             marker='o', linestyle='--', label=f'n={n} SA')
-    plt.plot(realistic_df['Time Limit'], realistic_df[f'n={n} LS'], 
-             marker='s', linestyle='-', label=f'n={n} SA+LS')
-plt.xlabel('Time limit (seconds)')
-plt.ylabel('Average satisfaction score')
-plt.title('SA vs SA + Local Search for realistic instances')
-plt.legend()
-plt.grid(True)
-plt.savefig('ls_comparison_realistic.png')
-plt.show()
+    easy_results = run_time_experiment('easy', easy_sizes, easy_tables, 0.1)
+
+    save_results('easy_time_results.csv', easy_sizes, easy_results)
+    plot_results('easy_time_results.csv', easy_sizes,
+                'SA vs SA + Local Search (Easy)',
+                'easy_time_plot.png')
+
+
+    realistic_sizes = [20, 40, 60, 80]
+    realistic_tables = [2, 4, 6, 8]
+
+
+    realistic_results = run_time_experiment('realistic', realistic_sizes, realistic_tables, 0.4)
+
+    save_results('realistic_time_results.csv', realistic_sizes, realistic_results)
+    plot_results('realistic _time_results.csv', realistic_sizes,
+                'SA vs SA + Local Search (Realistic)',
+                'realistic_time_plot.png')
+
+
 
 
 
 gamma_values = [0.80, 0.85, 0.90, 0.95, 0.99]
 seeds = [20, 100, 300]
-time_limit = 3
+time_limit = 5
 
-easy_sizes      = [50,  80,  150, 200, 300]
-easy_m_sizes    = [5,   8,   15,  20,  30]
+easy_realistic_sizes      = [20, 40, 60, 80]
+easy_realistic_m_sizes    = [2, 4, 6, 8]
 
-realistic_sizes   = [20,  50,  80,  150, 200]
-realistic_m_sizes = [5,   5,   8,   15,  20]
 
+
+def gamma_experiment(instances, difficulty):
+    #Runs experiment for gamma on different instances size on SA
+
+    result ={}
+    for gamma in gamma_values:
+        result[gamma] = {}
+        for n, m in zip(easy_realistic_sizes, easy_realistic_m_sizes):
+            P = instances[n]
+            scores = []
+
+            for seed in seeds:
+                random.seed(seed)
+                np.random.seed(seed)
+                pos_assignment = ordered_positive_greedy(n, m,  P)
+                sa_state = simulated_annealing(pos_assignment, n, m, P, time_limit, gamma)
+                score = satisfaction_score(sa_state, P, n)
+                scores.append(score)
+
+            # Calculate teh mean across all seeds
+            average = round(sum(scores) / len(scores), 2)
+            result[gamma][n] = average
+            print(f"{difficulty} Gamma: {gamma} n={n} Avg: {average}")
+    
+    return result
+
+
+
+def save_and_plot(results, filename, title):
+    """Saves result to CSV and generate a plot of performance."""
+    csv_file = f'{filename}.csv'
+
+    # Write result to CSV file 
+    with open(csv_file, 'w', newline='') as f:
+        writer = csv.writer(f)
+        header = ['Gamma']
+        for n in easy_realistic_sizes:
+            header.append(f'n={n}')
+        writer.writerow(header)
+        for gamma in gamma_values:
+            row = [gamma] + [results[gamma][n] for n in easy_realistic_sizes]
+            writer.writerow(row)
+
+    # Plot the results
+    df = pd.read_csv(csv_file)
+    plt.figure(figsize=(10, 6))
+
+    for col in df.columns[1:]:
+        plt.plot(df['Gamma'], df[col], marker='o', label=col)
+
+    plt.xlabel('Gamma value')
+    plt.ylabel('Average satisfaction score')
+    plt.title(title)
+    plt.legend()
+    plt.grid(True)
+    plt.savefig(f'{filename}.png')
+    plt.show()
 
 easy_instances = {}
-for n in easy_sizes:
-    easy_instances[n] = generate_guest(n, 0.1, 'easy', rng)
+realistic_instances = {}
+
+
+"""
+# Generate and save instance for easy and realistic
+easy_instances = {}
+for n in easy_realistic_sizes:
+        filename = f'instance_{n}_easy.npy'
+        P = generate_guest(n, 0.1, 'easy')
+        np.save(filename, P)
+        easy_instances[n] = np.load(filename)
+
 
 realistic_instances = {}
-for n in realistic_sizes:
-    realistic_instances[n] = generate_guest(n, 0.4, 'realistic', rng)
-
-gamma_easy_results      = {}
-gamma_realistic_results = {}
- 
-for gamma in gamma_values:
-    gamma_easy_results[gamma] = {}
-
-    for n, m in zip(easy_sizes, easy_m_sizes):
-        P = easy_instances[n]
-        scores = []
-
-        for seed in seeds:
-            random.seed(seed)
-            np.random.seed(seed)
-            dsatur_assignment = DSATUR(P, n, m)
-            T0 = initial_temp_cal(dsatur_assignment, 200, n, P)
-            sa_state = simulated_annealing(dsatur_assignment, n, m, P, time_limit, gamma)
-            score = satisfaction_score(sa_state, P, n)
-            scores.append(score)
-
-        average = round(sum(scores) / len(scores), 2)
-        gamma_easy_results[gamma][n] = average
-        print(f"Easy Gamma: {gamma} n={n} Avg: {average}")
+for n in easy_realistic_sizes:
+       filename = f'instance_{n}_realistic.npy'
+       P = generate_guest(n, 0.4, 'realistic')
+       np.save(filename, P)
+       realistic_instances[n] = np.load(filename)
 
 
+gamma_easy_results = gamma_experiment(easy_instances, "Easy")
+gamma_realistic_results = gamma_experiment(realistic_instances, "Realistic")
 
-# Realistic 
-for gamma in gamma_values:
-    gamma_realistic_results[gamma] = {}
+save_and_plot(
+    gamma_easy_results, 
+    'Gamma_easy', 
+    'Effect of Gamma on Easy Instances'
+)
 
-    for n, m in zip(realistic_sizes, realistic_m_sizes):
-        P = realistic_instances[n]
-        scores = []
-
-        for seed in seeds:
-            random.seed(seed)
-            np.random.seed(seed)
-            dsatur_assignment = DSATUR(P, n, m)
-            T0       = initial_temp_cal(dsatur_assignment, 200, n, P)
-            sa_state = simulated_annealing(dsatur_assignment, n, m, P, time_limit, gamma)
-            score    = satisfaction_score(sa_state, P, n)
-            scores.append(score)
-
-        average = round(sum(scores) / len(scores), 2)
-        gamma_realistic_results[gamma][n] = average
-        print(f"Realistic Gamma: {gamma} n={n} Avg: {average}")
-
-
-with open('gamma_easy.csv', 'w', newline='') as f:
-    writer = csv.writer(f)
-    header = ['Gamma']
-    for n in easy_sizes:
-        header.append(f'n={n}')
-    writer.writerow(header)
-    for gamma in gamma_values:
-        row = [gamma]
-        for n in easy_sizes:
-            row.append(gamma_easy_results[gamma][n])
-        writer.writerow(row)
-
-with open('gamma_realistic.csv', 'w', newline='') as f:
-    writer = csv.writer(f)
-    header = ['Gamma']
-    for n in realistic_sizes:
-        header.append(f'n={n}')
-    writer.writerow(header)
-    for gamma in gamma_values:
-        row = [gamma]
-        for n in realistic_sizes:
-            row.append(gamma_realistic_results[gamma][n])
-        writer.writerow(row)
-
-easy_df = pd.read_csv('gamma_easy.csv')
-
-plt.figure(figsize=(10, 6))
-for col in easy_df.columns[1:]:
-    plt.plot(easy_df['Gamma'], easy_df[col], marker='o', label=col)
-plt.xlabel('Gamma value')
-plt.ylabel('Average satisfaction score')
-plt.title('Effect of gamma on DSATUR + SA — easy instances')
-plt.legend()
-plt.grid(True)
-plt.savefig('gamma_easy.png')
-plt.show()
-
-# Plot Realistic
-realistic_df = pd.read_csv('gamma_realistic.csv')
-
-plt.figure(figsize=(10, 6))
-for col in realistic_df.columns[1:]:
-    plt.plot(realistic_df['Gamma'], realistic_df[col], marker='o', label=col)
-plt.xlabel('Gamma value')
-plt.ylabel('Average satisfaction score')
-plt.title('Effect of gamma on DSATUR + SA — realistic instances')
-plt.legend()
-plt.grid(True)
-plt.savefig('gamma_realistic.png')
-plt.show()
+save_and_plot(
+    gamma_realistic_results, 
+    'Gamma_realistic', 
+    'Effect of Gamma on Realistic Instances '
+)
+"""
 """
 
 

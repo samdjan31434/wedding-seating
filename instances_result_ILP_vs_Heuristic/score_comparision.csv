@@ -1,0 +1,76 @@
+Guests,Tables,Difficulty,ILP Score,Best Possible,ILP Time,Method,Average
+10,1,easy,17.0,17.0,0.0,Negative Greedy,17.0
+10,1,easy,17.0,17.0,0.0,Mixed Greedy,17.0
+10,1,easy,17.0,17.0,0.0,Positive Ordered,17.0
+10,1,easy,17.0,17.0,0.0,DSATUR Greedy,17.0
+10,1,easy,17.0,17.0,0.0,DSATUR pos Greedy,17.0
+20,2,easy,59.0,59.0,0.13,Negative Greedy,59.0
+20,2,easy,59.0,59.0,0.13,Mix Greedy,59.0
+20,2,easy,59.0,59.0,0.13,Positive Ordered,59.0
+20,2,easy,59.0,59.0,0.13,DSATUR Greedy,59.0
+20,2,easy,59.0,59.0,0.13,DSATUR pos Greedy,59.0
+30,3,easy,110.0,110.0,0.42,Negative Greedy,107.0
+30,3,easy,110.0,110.0,0.42,Mixed Greedy,107.0
+30,3,easy,110.0,110.0,0.42,Positive Ordered,107.0
+30,3,easy,110.0,110.0,0.42,,DSATUR Greedy,107.0
+30,3,easy,110.0,110.0,0.42,DSATUR pos Greedy,107.0
+40,4,easy,137.0,137.0,1.59,Negative Greedy,133.67
+40,4,easy,137.0,137.0,1.59,Mixed Greedy,133.67
+40,4,easy,137.0,137.0,1.59,Positive Ordered,131.0
+40,4,easy,137.0,137.0,1.59,DSATUR Greedy,133.67
+40,4,easy,137.0,137.0,1.59,DSATUR pos Greedy,133.67
+50,5,easy,197.0,197.0,14.85,Negative Greedy,197.0
+50,5,easy,197.0,197.0,14.85,Mixed Greedy,197.0
+50,5,easy,197.0,197.0,14.85,Positive Ordered,196.67
+50,5,easy,197.0,197.0,14.85,DSATUR Greedy,197.0
+50,5,easy,197.0,197.0,14.85,DSATUR pos Greedy,197.0
+60,6,easy,216.0,216.0,48.25,Negative Greedy,210.67
+60,6,easy,216.0,216.0,48.25,Mixed Greedy,210.67
+60,6,easy,216.0,216.0,48.25,Positive Ordered,210.67
+60,6,easy,216.0,216.0,48.25,DSATUR Greedy,210.67
+60,6,easy,216.0,216.0,48.25,DSATUR pos Greedy,210.67
+70,7,easy,277.0,277.0,150.68,Negative Greedy,277.0
+70,7,easy,277.0,277.0,150.68,Mixed Greedy,277.0
+70,7,easy,277.0,277.0,150.68,Positive Ordered,277.0
+70,7,easy,277.0,277.0,150.68,DSATUR Greedy,277.0
+70,7,easy,277.0,277.0,150.68,DSATUR pos Greedy,277.0
+80,8,easy,258.0,948.4,290.1,Negative Greedy,300.0
+80,8,easy,258.0,948.4,290.1,Mixed Greedy,300.0
+80,8,easy,258.0,948.4,290.1,Positive Ordered,298.67
+80,8,easy,258.0,948.4,290.1,DSATUR Greedy,300.0
+80,8,easy,258.0,948.4,290.1,DSATUR pos Greedy,299.67
+90,9,easy,214.0,1619.9,290.09,Negative Greedy,348.33
+90,9,easy,214.0,1619.9,290.09,Mixed Greedy,348.33
+90,9,easy,214.0,1619.9,290.09,Positive Ordered,343.0
+90,9,easy,214.0,1619.9,290.09,DSATUR Greedy,309.0
+90,9,easy,214.0,1619.9,290.09,DSATUR pos Greedy,340.0
+10,1,realistic,30.0,30.0,0.01,Negative Greedy,30.0
+10,1,realistic,30.0,30.0,0.01,Mixed Greedy,30.0
+10,1,realistic,30.0,30.0,0.01,Positive Ordered,30.0
+10,1,realistic,30.0,30.0,0.01,DSATUR Greedy,30.0
+10,1,realistic,30.0,30.0,0.01,DSATUR pos Greedy,30.0
+20,2,realistic,461.0,461.0,0.20,Negative Greedy,461.0
+20,2,realistic,461.0,461.0,0.20,Mixed Greedy,461.0
+20,2,realistic,461.0,461.0,0.20,Positive Ordered,461.0
+20,2,realistic,461.0,461.0,0.20,DSATUR Greedy,461.0
+20,2,realistic,461.0,461.0,0.20,DSATUR pos Greedy,461.0
+30,3,realistic,766.0,766.0,3.17,Negative Greedy,766.0
+30,3,realistic,766.0,766.0,3.17,Mixed Greedy,766.0
+30,3,realistic,766.0,766.0,3.17,Positive Ordered,766.0
+30,3,realistic,766.0,766.0,3.17,DSATUR Greedy,766.0
+30,3,realistic,766.0,766.0,3.17,DSATUR pos Greedy,737.0
+40,4,realistic,900.0,900.0,290.05,Negative Greedy,897.3
+40,4,realistic,900.0,900.0,290.05,Mixed Greedy,867.0
+40,4,realistic,900.0,900.0,290.05,Positive Ordered,893.7
+40,4,realistic,900.0,900.0,290.05,DSATUR Greedy,897.3
+40,4,realistic,900.0,900.0,290.05,DSATUR pos Greedy,880.3
+50,5,realistic,1415.0,2346.6,290.15,Negative Greedy,1520.0
+50,5,realistic,1415.0,2346.6,290.15,Mixed Greedy,1502.67
+50,5,realistic,1415.0,2346.6,290.15,Positive Ordered,1506.67
+50,5,realistic,1415.0,2346.6,290.15,DSATUR Greedy,1474.33
+50,5,realistic,1415.0,2346.6,290.15,DSATUR pos Greedy,1520.0
+60,6,realistic,1664.0,3424.6,290.14,Negative Greedy,1895.33
+60,6,realistic,1664.0,3424.6,290.14,Mixed Greedy,1895.67
+60,6,realistic,1664.0,3424.6,290.14,Positive Ordered,1866.33
+60,6,realistic,1664.0,3424.6,290.14,DSATUR Greedy,1906.67
+60,6,realistic,1664.0,3424.6,290.14,DSATUR pos Greedy,1905.33

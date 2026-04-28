@@ -1,5 +1,5 @@
 def graph_density(P, n):
-    """Calculate the density of the preference graph"""
+    """Calculate the density of the preference graph."""
 
     total_pairs = (n * (n-1)) // 2
     non_zero_pairs = 0
@@ -11,47 +11,52 @@ def graph_density(P, n):
     
     density = non_zero_pairs / total_pairs
     
-    print(f"Total possible amount of pairs:  {total_pairs}")
-    print(f"Non zero pairs:        {non_zero_pairs}")
-    print(f"Graph density:         {density:.4f}")
+    print(f"Total possible amount of pairs: {total_pairs}")
+    print(f"Non zero pairs: {non_zero_pairs}")
+    print(f"Graph density: {density:.4f}")
 
     return density
 
 
 class ConnectionGraph:
-  """Represents a weighted undirected graph of guest relationship"""
+  """Represents a weighted undirected graph of guest relationship."""
 
   def __init__(self):
-    self.vertices = {}    # store each guest and the list of conflciting vertices
-    self.edges = {}       # stores weight for conflict between edges
+    self.vertices = {}    # adjancency list
+    self.edges = {}       # stores weight
+
 
   def add_vertex(self, vertex):
-    """" """
     self.vertices[vertex] = []     
+
+
   def add_edge(self, source, target):
-    
-    self.vertices[source].append(target)   # add edges bewteen guest with conflicts
+    # add edges bewteen guest with preferences
+    self.vertices[source].append(target)  
+
 
   def add_weight(self , source, target , weight):
-     """Stores the preference score as weight for the edges in both direction"""
+     """Stores the preference score as weight
+       for the edges in both direction."""
      self.edges[(source,target)] = weight 
      self.edges[(target, source)] = weight      
 
+
   def get_adjacent_count(self, vertex):
-    "return the degree for a specific guest"
+    """Return the degree of a specific guest."""
     return len(self.vertices[vertex])          
 
 
 def build_graph(P, n, condition):
-    """Builds a Connection graph based on specific weight conditions"""
+    """Builds a Connection graph based on specific weight conditions."""
 
     graph  = ConnectionGraph()
     for i in range(n):
         graph.add_vertex(i)
 
-    # intilialises edges with weight between guest with preference
+    # Intilialises edges with weight between guest with preference
     for i in range(n):
-        for j in range(i+1, n):
+        for j in range(i + 1, n):
             weight = P[i][j]
             if condition(weight):
                 graph.add_edge(i, j)
@@ -62,28 +67,30 @@ def build_graph(P, n, condition):
 
 
 def build_graph_negative(P, n):
-    """Creates a graph with negative weights weighted edges"""
-    return build_graph(P, n, lambda w: w<0)
+    """Creates a graph with negative weights weighted edges."""
+    return build_graph(P, n, lambda w: w < 0)
+
 
 def build_graph_positive(P, n):
-    """"Creates a graph with positive weighted edges"""
-    return build_graph(P, n, lambda w: w>0)
+    """"Creates a graph with positive weighted edges."""
+    return build_graph(P, n, lambda w: w > 0)
 
 
 def initialize(m):
     """Creates a dictionary to store the number of guest at each table"""
-    return {t: 0 for t in range(1,m+1)}
+    return {t: 0 for t in range(1, m + 1)}
 
 
 def negative_greedy(n, m, P):
-    """Assigns guest to tables using a greedy approach of trying to avoid conflicts"""
+    """Assigns guest to tables using a greedy
+      approach of trying to avoid conflicts.
+    """
 
     graph = build_graph_negative(P, n)
     # dictionary key(guest ): value(table guest is assigned)
     assignment = {}
     # finds the table capacity
     capacity = n // m
-
     table_count = initialize(m)
 
     for guest in range(n):
@@ -93,14 +100,13 @@ def negative_greedy(n, m, P):
             if neighbour in assignment:
                 used_tables.add(assignment[neighbour])
         
-        
         table = 1
         while table <= m:
             # Check if table has no conflicting guest and has space
             if table not in used_tables and table_count[table] < capacity:
                 break
             table += 1
-            # If there is no conflit free table, pick least full table
+            # If there is no conflit free table, pick the least full table
             if table > m:
                 table = min(table_count, key=table_count.get)
                 break
@@ -113,8 +119,9 @@ def negative_greedy(n, m, P):
 
 
 def mixed_greedy(n, m, P):
-    """"Assigns guest greedily by maximisng the total satisafaction score with guest already sat their"""
-
+    """Assigns guest greedily by maximisng the total satisafaction 
+        score with guest already sat their
+    """
     assignment = {}
     capacity = n // m
     table_count = initialize(m)    
@@ -123,7 +130,7 @@ def mixed_greedy(n, m, P):
         best_score = -10000000
         best_table = 1 
 
-        for table in range(1, m+1):
+        for table in range(1, m + 1):
             if table_count[table] < capacity:
                 score = 0
                 # Add weight of preference between current guest and guest already sat at this table
@@ -142,8 +149,9 @@ def mixed_greedy(n, m, P):
 
 
 def ordered_positive_greedy(n, m, P):
-    """Sorts guests by their total preference contribution then applies greedy assignment"""    
-
+    """Sorts guests by their total preference
+      contribution then applies greedy assignment
+    """    
     assignment = {}
     capacity = n // m
     table_count = initialize(m)
@@ -182,7 +190,7 @@ def ordered_positive_greedy(n, m, P):
 
      
 def DSATUR(n, m, P):
-    """Implement DSATUR heuristic on a negative weighted graph"""
+    """Implement DSATUR heuristic using negative weighted graph."""
 
     graph = build_graph_negative(P, n)
     assignment = {}
@@ -190,9 +198,7 @@ def DSATUR(n, m, P):
     table_count = initialize(m)
 
     # Initialises saturation degree: number of different table assigned to neighbouring guest
-    saturation = {}
-    for guest in range(n):
-        saturation[guest] = 0
+    saturation = {guest: 0 for guest in range(n)}
 
     # break ties by storing the number of conflict for each guest
     conflict_count  = {}
@@ -204,10 +210,11 @@ def DSATUR(n, m, P):
     while unnassigned:
         # find the guest with the highest saturation and break ties by looking at conflict count
         best_guest = None
-        largest_satur = -1
-        highest_conflict = -1
+        largest_satur , highest_conflict = -1
+
         for guest in unnassigned:
-            if (saturation[guest]> largest_satur) or (saturation[guest] == largest_satur and conflict_count[guest] > highest_conflict):
+            if (saturation[guest]> largest_satur) or (
+                saturation[guest] == largest_satur and conflict_count[guest] > highest_conflict):
                 best_guest = guest
                 highest_conflict = conflict_count[guest]
                 largest_satur = saturation[guest]
@@ -228,14 +235,14 @@ def DSATUR(n, m, P):
             table += 1
 
         if not found:
-                table = min(table_count,key= table_count.get)
+                table = min(table_count, key = table_count.get)
 
-        # assigns guest to table        
+        # Assigns guest to table        
         assignment[best_guest] = table
         table_count[table] += 1
         unnassigned.remove(best_guest)
 
-        # update saturation of neighberouing guests who arent seated
+        # Update saturation of neighberouing guests who arent seated
         for neighbour in graph.vertices[best_guest]:
             if neighbour in unnassigned:
                 neighbour_tables = set()
@@ -244,7 +251,6 @@ def DSATUR(n, m, P):
                         neighbour_tables.add(assignment[neigh_table])
                 saturation[neighbour] = len(neighbour_tables)
 
-
     return assignment 
 
 
@@ -252,36 +258,35 @@ def DSATUR_positive_greedy(n, m, P):
     """Modified DSATUR approach that priortises seating guest
         based on positive weight and try to maximise satisfaction score
     """
-
     graph = build_graph_positive(P, n)
     assignment = {}
     capacity = n // m
     table_count = initialize(m)
 
-    saturation = {}
-    for guest in range(n):
-        saturation[guest] = 0
+    saturation = {guest: 0 for guest in range(n)}
 
-    # used to break ties by storing the number of positive connection for each guest
-    compatible_count  = {}
+    # Used to break ties by storing the number of positive connection for each guest
+    compatible_count = {}
     for guest in range(n):
         compatible_count[guest] = graph.get_adjacent_count(guest)
 
-    unassigned  = set(range(n))
+    unassigned = set(range(n))
 
     while unassigned:
-
-        # Finds guest with the highest saturation neighbrous and break ties by looking at compatible count
+        # Finds guest with the highest saturation neighbours
         best_guest = None
         largest_satur = -1
         highest_conflict = -1
+
         for guest in unassigned:
-            if (saturation[guest]> largest_satur) or (saturation[guest] == largest_satur and compatible_count[guest] > highest_conflict):
+            if (saturation[guest] > largest_satur) or (
+                saturation[guest] == largest_satur and 
+                compatible_count[guest] > highest_conflict):
                 best_guest = guest
                 highest_conflict = compatible_count[guest]
                 largest_satur = saturation[guest]
 
-        # find the table that maximise preferenece score with already seated positive neighbours
+        # Finds the table that maximise preferenece score with already seated positive neighbours
         best_score = -1000000
         best_table = 1        
 
@@ -292,6 +297,7 @@ def DSATUR_positive_greedy(n, m, P):
                     if neighbour in assignment:
                         if assignment[neighbour] == table:
                             score += P[best_guest][neighbour]
+
                 if score > best_score:
                     best_score = score
                     best_table = table
@@ -301,8 +307,7 @@ def DSATUR_positive_greedy(n, m, P):
         table_count[best_table] += 1
         unassigned.remove(best_guest)
         
-        
-        # update saturation of unassigned positive neighbours
+        # Update saturation of unassigned positive neighbours
         for neighbour in graph.vertices[best_guest]:
             if neighbour in unassigned:
                 neighbour_tables = set()

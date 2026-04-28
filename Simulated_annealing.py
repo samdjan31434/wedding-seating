@@ -7,31 +7,22 @@ import numpy as np
 import csv
 import matplotlib.pyplot as plt
 import pandas as pd
-from extra import local_search
+from extra import local_search, satisfaction_score
 
 
 
 rng = np.random.default_rng()
 
-#calculates the total satisfaction score 
-def satisfaction_score(assignment, P, n):
-   total_score = 0
-   for i in range(n):
-     for j in range(i+1, n):
-         if assignment[i] == assignment[j]:
-             total_score += P[i][j]
-   return total_score  
-
-
-# swap operator, changes assigment of guest at different tables
 def generate_neighbour_state(assignment, n, v):
-    new_assignment = assignment.copy()
+    """Creates a new candidate solution by swapping guests table assignment"""
 
+    new_assignment = assignment.copy()
     # v is the number of swap operation to do 
     for i in range(v):
         guest1 = random.randint(0, n-1)
         guest2 = random.randint(0, n-1)
 
+        # Check that the two swaped guest are sat at different tables
         while new_assignment[guest1] == new_assignment[guest2]:
             guest2 = random.randint(0, n-1)
         new_assignment[guest1], new_assignment[guest2] = new_assignment[guest2], new_assignment[guest1]
@@ -40,20 +31,21 @@ def generate_neighbour_state(assignment, n, v):
 
 
 def initial_temp_cal(assignment, num_samples, n, P, acceptance_rate = 0.8): 
+    """Estimates the starting temperature for Simulated Annealing"""
     neg_change = []
     current_assignment = assignment.copy()
 
+    # Edge case: if every guest is sat at one table, cant swap
     unique_tables = set(assignment.values())
     if len(unique_tables) <= 1:
         return 1.0
     else:
-
         for i in range(num_samples):
             guest1 = random.randint(0, n-1)
             guest2 = random.randint(0, n-1)
             retries = 0
             while current_assignment[guest1] == current_assignment[guest2]:
-                guest2 = random.randint(0, n-1)
+                guest2 = random.randint(0, n - 1)
                 retries += 1
                 if retries > 100:
                     break
@@ -62,13 +54,19 @@ def initial_temp_cal(assignment, num_samples, n, P, acceptance_rate = 0.8):
                 continue 
                 
             score_before = satisfaction_score(current_assignment, P, n)
-            current_assignment[guest1] , current_assignment[guest2] = current_assignment[guest2],current_assignment[guest1]
-            score_after  = satisfaction_score(current_assignment, P, n)
+            # Temporary swap
+            current_assignment[guest1], current_assignment[guest2] = \
+            current_assignment[guest2],current_assignment[guest1]
 
-            if (score_after - score_before)< 0:
-                neg_change.append(abs(score_after-score_before))
+            score_after = satisfaction_score(current_assignment, P, n)
+
+            delta = score_after - score_before
+            if delta < 0:
+                neg_change.append(abs(delta))
             
-            current_assignment[guest1], current_assignment[guest2] = current_assignment[guest2],current_assignment[guest1]
+            # Reverse temporary swap
+            current_assignment[guest1], current_assignment[guest2] = \
+            current_assignment[guest2], current_assignment[guest1]
 
         if neg_change:
             average_change = sum(neg_change) / len(neg_change)
@@ -80,20 +78,21 @@ def initial_temp_cal(assignment, num_samples, n, P, acceptance_rate = 0.8):
         return T
 
 def simulated_annealing(initial_assignment, n, m, P, time_limit, gamma):
+    """Improve guest seating using Simulated annealing"""
     x = initial_assignment.copy()
     best_state = x.copy()
     best_score = satisfaction_score(x, P, n)
     stagnation = 0
-    v = 1
-    il_limit = 100 
+    v = 1           # Number of swaps per move  
+    il_limit = 100  # Iterations per temperature level
     T = initial_temp_cal(initial_assignment, 100, n, P)
     start_time = time.time()
-    max_stagnation  = 100
+    max_stagnation = 100
     if m == 1:
         return initial_assignment
     else:
         
-        # Simmulated annealing that continue while temperture is not zero or the time limit is not reached
+        # Loop until temperture is not zero or the time limit is not reached
         while T > 1e-6 and (time.time() - start_time) < time_limit:
             for i in range(il_limit):
                 y = generate_neighbour_state(x, n, v)
@@ -101,6 +100,7 @@ def simulated_annealing(initial_assignment, n, m, P, time_limit, gamma):
                 f_y = satisfaction_score(y, P, n)
                 delta = f_y - f_x
 
+                # Accepts new state if better
                 if delta > 0:
                     x = y
                     stagnation = 0
@@ -109,6 +109,7 @@ def simulated_annealing(initial_assignment, n, m, P, time_limit, gamma):
                         best_state = y.copy()
                         best_score = f_y
                 else:
+                    # if new state is worst accept based on probability
                     r = random.random()
                     try:
                         prob_y = 1 / (1 + math.exp(-(delta) / T))
@@ -121,28 +122,27 @@ def simulated_annealing(initial_assignment, n, m, P, time_limit, gamma):
                         v = 1
                     else:
                         stagnation = stagnation + 1
-
+                    
+                    # Change neighberhood if stuck
                     if stagnation == max_stagnation:
                         stagnation = 0
                         v += 1
                         if v > m:
                             v = 1
-            T = T * gamma  
+
+            # Cooling schedule                
+            T *= gamma  
 
     return best_state
-
-
-
-
-
-
 
 
 time_limit = [3, 5, 10, 30, 60]
 seeds = [20, 100, 300]
 
+
 def run_time_experiment(difficulty, sizes, table_sizes, density):
-  
+    """Runs sa and local search for different time limits and instances"""
+        
     instances = {n: generate_guest(n, density, difficulty) for n in sizes}
     np.save(f"{difficulty}_time_instances.npy", instances, allow_pickle=True)
 
@@ -170,12 +170,15 @@ def run_time_experiment(difficulty, sizes, table_sizes, density):
                 "sa": round(sum(average_sa_scores) / len(average_sa_scores), 2),
                 "ls": round(sum(ls_average_scores) / len(ls_average_scores), 2),
             }
+
             print(f"Time {tl}s | n={n} | SA={results[tl][n]['sa']} | LS={results[tl][n]['ls']}")
 
     return results
 
 
 def save_results(csv_filename, sizes, results):
+    """Save result to CSV."""
+
     with open(csv_filename, 'w', newline='') as f:
         writer = csv.writer(f)
 
@@ -192,8 +195,9 @@ def save_results(csv_filename, sizes, results):
 
 
 def plot_results(csv_filename, sizes, title, png_filename):
-    df = pd.read_csv(csv_filename)
+    """Plot SA vs SA+LS results from CSV."""
 
+    df = pd.read_csv(csv_filename)
     plt.figure(figsize=(10, 6))
     for n in sizes:
         plt.plot(df['Time Limit'], df[f'n={n} SA'],
@@ -211,66 +215,53 @@ def plot_results(csv_filename, sizes, title, png_filename):
 
 # Result for larger instances sizes
 def larger_result_time_limit():
+    """Run time experiment for larger instances"""
 
     easy_sizes = [100, 200, 300, 400]
     easy_tables = [10, 20, 30, 40]
 
-    easy_results = run_time_experiment('easy', easy_sizes, easy_tables, 0.1)
+    easy_results = run_time_experiment('sparse', easy_sizes, easy_tables, 0.1)
 
     save_results('larger_easy_time_results.csv', easy_sizes, easy_results)
     plot_results('larger_easy_time_results.csv', easy_sizes,
-                'SA vs SA + Local Search (Easy)',
+                'SA vs SA + Local Search (sparse)',
                 'larger_easy_time_plot.png')
-
 
     realistic_sizes = [100, 200, 300, 400]
     realistic_tables = [10, 20, 30, 40]
 
-
     realistic_results = run_time_experiment('realistic', realistic_sizes, realistic_tables, 0.4)
-
     save_results('larger_realistic_time_results.csv', realistic_sizes, realistic_results)
     plot_results('larger_realistic_time_results.csv', realistic_sizes,
                 'SA vs SA + Local Search (Realistic)',
                 'larger_realistic_time_plot.png')
 
 
-
-larger_result_time_limit()
-
-
-
-
-
-
 def result_easy_time_limit():
+    "Run time limit experiment on sparse instances."
 
     easy_sizes = [20, 40, 60, 80]
     easy_tables = [2, 4, 6, 8]
 
-    easy_results = run_time_experiment('easy', easy_sizes, easy_tables, 0.1)
-
+    easy_results = run_time_experiment('sparse', easy_sizes, easy_tables, 0.1)
     save_results('easy_time_results.csv', easy_sizes, easy_results)
     plot_results('easy_time_results.csv', easy_sizes,
-                'SA vs SA + Local Search (Easy)',
+                'SA vs SA + Local Search (sparse)',
                 'easy_time_plot.png')
-
 
     realistic_sizes = [20, 40, 60, 80]
     realistic_tables = [2, 4, 6, 8]
 
 
-    realistic_results = run_time_experiment('realistic', realistic_sizes, realistic_tables, 0.4)
-
+    realistic_results = run_time_experiment(
+        'realistic', realistic_sizes, realistic_tables, 0.4
+    )
     save_results('realistic_time_results.csv', realistic_sizes, realistic_results)
     plot_results('realistic _time_results.csv', realistic_sizes,
                 'SA vs SA + Local Search (Realistic)',
                 'realistic_time_plot.png')
 
-
-
-
-
+#Parameter for gamma experiment
 gamma_values = [0.80, 0.85, 0.90, 0.95, 0.99]
 seeds = [20, 100, 300]
 time_limit = 5
@@ -281,11 +272,12 @@ easy_realistic_m_sizes    = [2, 4, 6, 8]
 
 
 def gamma_experiment(instances, difficulty):
-    #Runs experiment for gamma on different instances size on SA
+    """Runs experiment for gamma on different instances size on SA."""
 
     result ={}
     for gamma in gamma_values:
         result[gamma] = {}
+
         for n, m in zip(easy_realistic_sizes, easy_realistic_m_sizes):
             P = instances[n]
             scores = []
@@ -293,12 +285,13 @@ def gamma_experiment(instances, difficulty):
             for seed in seeds:
                 random.seed(seed)
                 np.random.seed(seed)
+
                 pos_assignment = ordered_positive_greedy(n, m,  P)
                 sa_state = simulated_annealing(pos_assignment, n, m, P, time_limit, gamma)
                 score = satisfaction_score(sa_state, P, n)
                 scores.append(score)
 
-            # Calculate teh mean across all seeds
+            # Calculate the mean across all seeds
             average = round(sum(scores) / len(scores), 2)
             result[gamma][n] = average
             print(f"{difficulty} Gamma: {gamma} n={n} Avg: {average}")
@@ -309,6 +302,7 @@ def gamma_experiment(instances, difficulty):
 
 def save_and_plot(results, filename, title):
     """Saves result to CSV and generate a plot of performance."""
+
     csv_file = f'{filename}.csv'
 
     # Write result to CSV file 
@@ -337,19 +331,14 @@ def save_and_plot(results, filename, title):
     plt.savefig(f'{filename}.png')
     plt.show()
 
-easy_instances = {}
-realistic_instances = {}
 
-
-"""
-# Generate and save instance for easy and realistic
+# Generates and save instances for easy and realistic
 easy_instances = {}
 for n in easy_realistic_sizes:
         filename = f'instance_{n}_easy.npy'
-        P = generate_guest(n, 0.1, 'easy')
+        P = generate_guest(n, 0.1, 'sparse')
         np.save(filename, P)
         easy_instances[n] = np.load(filename)
-
 
 realistic_instances = {}
 for n in easy_realistic_sizes:
@@ -359,13 +348,13 @@ for n in easy_realistic_sizes:
        realistic_instances[n] = np.load(filename)
 
 
-gamma_easy_results = gamma_experiment(easy_instances, "Easy")
+gamma_easy_results = gamma_experiment(easy_instances, "sparse")
 gamma_realistic_results = gamma_experiment(realistic_instances, "Realistic")
 
 save_and_plot(
     gamma_easy_results, 
-    'Gamma_easy', 
-    'Effect of Gamma on Easy Instances'
+    'Gamma_sparse', 
+    'Effect of Gamma on Sparse Instances'
 )
 
 save_and_plot(
@@ -373,8 +362,3 @@ save_and_plot(
     'Gamma_realistic', 
     'Effect of Gamma on Realistic Instances '
 )
-"""
-"""
-
-
-

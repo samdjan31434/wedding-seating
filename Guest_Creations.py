@@ -23,8 +23,6 @@ def age_score(age_diff):
 def assign_random_positive_preferences(preference, n, graph_density):
     """Add prefernce score to empty cell in preference matrix with random 
     positive values"""
-
-
     max_pairs = (n * (n-1)) // 2
     
     # Calculate the number of relationship that already exists
@@ -52,10 +50,9 @@ def assign_random_positive_preferences(preference, n, graph_density):
 
 def create_couple_pairs(num_couples, adults, preference):
     """Pairs adults together as couples and assign them max preference score"""
-
     couple_pairs = []
     for i in range(0, num_couples * 2, 2):
-        if i + 1 >= len(adults):
+        if (i + 1) >= len(adults):
             break
         g1 = adults[i]
         g2 = adults[i+1]
@@ -69,9 +66,7 @@ def create_couple_pairs(num_couples, adults, preference):
 # Generates guest matrix
 def generate_guest(n, graph_density, difficulty):
     """Creates a full guest list based on constraints"""
-
-
-    # initialislisses an  n x n matrix
+    # Initialislisses an  n x n matrix
     preference = np.zeros((n,n), dtype =int)
 
     # Generate ages using a normal distribution mean=35 , std = 10
@@ -79,8 +74,7 @@ def generate_guest(n, graph_density, difficulty):
     i: int(min(100, max(0, rng.normal(34, 10))))
     for i in range(n)}
 
-
-    young_children  = []    # age 0 to 7 sit with parents
+    young_children  = []    # Age 0 to 7 sit with parents
     teen = []   # Age 8 to 17 sit at their own table
     adults = []  # Age 18+ Singles and couples
 
@@ -91,13 +85,12 @@ def generate_guest(n, graph_density, difficulty):
             teen.append(i)
         else:
             adults.append(i)
-
    
-    if difficulty == "easy":
+    if difficulty == "sparse":
         # Create a sparse matrix, assume no children and dont care for ages
-        num_couples = int(len(adults)*0.2) // 2
+        num_couples = int(len(adults) * 0.2) // 2
         conflict_rate  =  0.01
-         # assign conflict
+         # Assigns conflict
         num_conflicts = int(n * conflict_rate)
         conflicts_assigned = 0
         while conflicts_assigned < num_conflicts:
@@ -113,10 +106,9 @@ def generate_guest(n, graph_density, difficulty):
 
         return preference
 
-
     if difficulty == "realistic":
         # children sit with parent wedding 
-        num_couples = int(len(adults)*0.55) // 2
+        num_couples = int(len(adults) * 0.55) // 2
         conflict_rate = 0.05
          
         couple_pairs , preference = create_couple_pairs(num_couples, adults, preference)   
@@ -132,7 +124,6 @@ def generate_guest(n, graph_density, difficulty):
             preference[child][parent2] = 10
             preference[parent2][child] = 10
             child_index += 1
-
 
     # try to make teenager sit at own table and not sit with adults
     for teenager in teen:
@@ -160,8 +151,7 @@ def generate_guest(n, graph_density, difficulty):
                 preference[g2][single] = -3
                 preference[single][g2] = -3
 
-    
-    # assings conflict
+    # Assigns conflict
     num_conflicts = int(n * conflict_rate)
     conflicts_assigned = 0
     while conflicts_assigned < num_conflicts:
@@ -175,9 +165,9 @@ def generate_guest(n, graph_density, difficulty):
 
     preference = assign_random_positive_preferences(preference, n, graph_density)
 
-    # age scoring for remaining neutral pairs for j>i
+    # Age scoring for remaining neutral pairs for j > i
     for i in range(n):
-        for j in range(i+1, n):
+        for j in range(i + 1, n):
             if preference[i][j] == 0:
                 age_diff = abs(ages[i] - ages[j])
                 score = age_score(age_diff)

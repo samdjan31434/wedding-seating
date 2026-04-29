@@ -333,6 +333,7 @@ def save_and_plot(results, filename, title):
 
 
 # Generates and save instances for easy and realistic
+"""
 easy_instances = {}
 for n in easy_realistic_sizes:
         filename = f'instance_{n}_easy.npy'
@@ -356,7 +357,7 @@ save_and_plot(
     'Gamma_sparse', 
     'Effect of Gamma on Sparse Instances'
 )
-
+"""
 save_and_plot(
     gamma_realistic_results, 
     'Gamma_realistic', 
